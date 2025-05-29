@@ -28,10 +28,10 @@ Legend:
             - [~] Exit
             - ...
 
-        - Game events
-            - Entity created
-            - Entity destroyed
-            - Collision detected
+        - [~] Game events
+            - [~] Entity created
+            - [~] Entity destroyed
+            - [~] Collision detected
             - ...
 
         - Entities
