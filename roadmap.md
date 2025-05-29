@@ -1,3 +1,8 @@
+Legend:
+
+* [+] done
+* [~] in progress
+
 - Asteroids game made in Rust
 
     - Rendering
@@ -14,13 +19,13 @@
 
     - Game logic
 
-        - Game commands
+        - [~] Game commands
             - Player input
                 - Forward acceleration
                 - Backward acceleration
                 - Incline (left/right)
                 - Fire
-            - Exit
+            - [~] Exit
             - ...
 
         - Game events
