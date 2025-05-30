@@ -64,7 +64,7 @@ Legend:
             - Event dispatching
 
     - Utils
-        - Worker for parallel execution (i.e. game state update)
+        - [+] Worker for parallel execution (i.e. game state update)
 
     - Physics
         - R&D
