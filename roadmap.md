@@ -2,18 +2,37 @@ Legend:
 
 * [+] done
 * [~] in progress
+* [?] not sure
 
 - Asteroids game made in Rust
 
     - Rendering
 
         - Draw a window
-            - add winit
+            - Add winit
+            - Show a window
 
         - Vulkan
             - R&D: suitable rendering library for Rust?
                 - vulkano?
                 - ash-rs?
+            - VK backend initialization
+            - VK renderer initialization
+
+        - Shaders
+            - Entities rendering
+            - UI rendering
+
+        - Utils for various purposes
+            - Texture atlas
+            
+        - UI rendering
+
+            - Fonts
+                - Building texture atlas
+                - ...
+
+            - ...
 
         - ...
 
@@ -44,7 +63,17 @@ Legend:
             - Entities updated
             - Event dispatching
 
+    - Utils
+        - Worker for parallel execution (i.e. game state update)
+
     - Physics
         - R&D
+
+    - [?] Configuration
+        - Window configuration
+        - Renderer configuration
+        - Controls
+
+    - [?] Logs
 
     - ...
