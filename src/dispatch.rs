@@ -10,7 +10,9 @@ impl<T> Sender<T> {
     }
 }
 
-pub struct Handler<T>(Box<dyn Fn(&T)>);
+struct Handler<T>(Box<dyn Fn(&T)>);
+
+unsafe impl<T> Send for Handler<T> {}
 
 impl<T, H> From<H> for Handler<T>
 where
@@ -26,17 +28,17 @@ where
 pub struct Dispatcher<T> {
     handlers: Mutex<Vec<Handler<T>>>,
     tx: mpsc::Sender<T>,
-    rx: mpsc::Receiver<T>,
+    rx: Mutex<mpsc::Receiver<T>>,
 }
 
 impl<T> Dispatcher<T> {
-    fn new() -> Arc<Dispatcher<T>> {
+    pub fn new() -> Arc<Dispatcher<T>> {
         let (tx, rx) = mpsc::channel();
 
         let manager = Dispatcher {
             handlers: Mutex::default(),
             tx,
-            rx,
+            rx: Mutex::new(rx),
         };
 
         Arc::new(manager)
@@ -50,7 +52,7 @@ impl<T> Dispatcher<T> {
 
     pub fn add_handler<H>(&self, handler: H)
     where
-        H: Into<Handler<T>>,
+        H: Fn(&T) + 'static,
     {
         let handler = handler.into();
 
@@ -59,7 +61,8 @@ impl<T> Dispatcher<T> {
     }
 
     pub fn dispatch(&self) {
-        let messages: Vec<_> = self.rx.try_iter().collect();
+        let rx = self.rx.lock().unwrap();
+        let messages: Vec<_> = rx.try_iter().collect();
 
         let handlers = self.handlers.lock().unwrap();
         for message in messages {
@@ -82,14 +85,6 @@ pub enum Event {
     EntityCreated(/* TODO */),
     EntityDestroyed(/* TODO */),
     CollisionDetected(/* TODO */),
-}
-
-pub fn new_command_dispatcher() -> Arc<Dispatcher<Command>> {
-    Dispatcher::new()
-}
-
-pub fn new_event_dispatcher() -> Arc<Dispatcher<Event>> {
-    Dispatcher::new()
 }
 
 #[cfg(test)]
