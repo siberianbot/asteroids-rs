@@ -1,6 +1,7 @@
+mod app;
 mod dispatch;
 mod worker;
 
 fn main() {
-    println!("Hello, world!");
+    app::run();
 }

@@ -8,9 +8,9 @@ Legend:
 
     - Rendering
 
-        - Draw a window
-            - Add winit
-            - Show a window
+        - [+] Draw a window
+            - [+] Add winit
+            - [+] Show a window
 
         - Vulkan
             - R&D: suitable rendering library for Rust?
