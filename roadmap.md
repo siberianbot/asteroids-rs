@@ -53,15 +53,15 @@ Legend:
             - [~] Collision detected
             - ...
 
-        - Entities
-            - Spacecraft entity
-            - Asteroid entity
-            - Camera entity
+        - [~] Entities
+            - [~] Spacecraft entity
+            - [~] Asteroid entity
+            - [~] Camera entity
 
-        - Game loop
-            - Commands dispatching
+        - [~] Game loop
+            - [~] Commands dispatching
             - Entities updated
-            - Event dispatching
+            - [~] Event dispatching
 
     - Utils
         - [+] Worker for parallel execution (i.e. game state update)

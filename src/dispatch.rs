@@ -1,5 +1,7 @@
 use std::sync::{Arc, Mutex, mpsc};
 
+use crate::game::entities::EntityId;
+
 pub struct Sender<T> {
     tx: mpsc::Sender<T>,
 }
@@ -82,8 +84,8 @@ pub enum Command {
 #[derive(Debug, PartialEq)]
 #[non_exhaustive]
 pub enum Event {
-    EntityCreated(/* TODO */),
-    EntityDestroyed(/* TODO */),
+    EntityCreated(EntityId),
+    EntityDestroyed(EntityId),
     CollisionDetected(/* TODO */),
 }
 
