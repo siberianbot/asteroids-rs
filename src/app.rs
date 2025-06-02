@@ -10,6 +10,7 @@ use winit::{
 
 use crate::{
     dispatch::{Command, Dispatcher, Event, Sender},
+    game::Game,
     worker::Worker,
 };
 
@@ -90,6 +91,7 @@ impl Inner {
 struct App {
     command_dispatcher: Arc<Dispatcher<Command>>,
     event_dispatcher: Arc<Dispatcher<Event>>,
+    _game: Arc<Game>,
 
     inner: Option<Inner>,
 }
@@ -98,6 +100,8 @@ impl App {
     fn new(proxy: EventLoopProxy<AppEvent>) -> App {
         let command_dispatcher = Dispatcher::new();
         let event_dispatcher = Dispatcher::new();
+
+        let game = Game::new(&command_dispatcher, &event_dispatcher);
 
         command_dispatcher.add_handler(move |command: &Command| match command {
             Command::Exit => proxy
@@ -110,6 +114,7 @@ impl App {
         let app = App {
             command_dispatcher,
             event_dispatcher,
+            _game: game,
             inner: Default::default(),
         };
 
