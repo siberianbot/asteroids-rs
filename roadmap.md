@@ -58,10 +58,18 @@ Legend:
             - [~] Asteroid entity
             - [~] Camera entity
 
+        - [~] Messaging
+            - [+] Commands dispatching
+            - [~] Commands handling
+            - [+] Events dispatching
+            - [~] Events handling
+
         - [~] Game loop
-            - [~] Commands dispatching
-            - Entities updated
-            - [~] Event dispatching
+            - [~] Entities updated
+                - [+] Camera sync with target entity
+                - Spacecraft acceleration/deceleration
+                - Entities movement
+                - ...
 
     - Utils
         - [+] Worker for parallel execution (i.e. game state update)

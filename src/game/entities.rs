@@ -96,6 +96,71 @@ pub enum Entity {
     Asteroid(Asteroid),
 }
 
+impl Entity {
+    pub fn as_camera(&self) -> Option<&Camera> {
+        match self {
+            Entity::Camera(camera) => Some(camera),
+            _ => None,
+        }
+    }
+
+    pub fn to_camera(&self) -> &Camera {
+        match self {
+            Entity::Camera(camera) => camera,
+            _ => panic!("entity is not a camera"),
+        }
+    }
+
+    pub fn to_camera_mut(&mut self) -> &mut Camera {
+        match self {
+            Entity::Camera(camera) => camera,
+            _ => panic!("entity is not a camera"),
+        }
+    }
+
+    pub fn as_spacecraft(&self) -> Option<&Spacecraft> {
+        match self {
+            Entity::Spacecraft(spacecraft) => Some(spacecraft),
+            _ => None,
+        }
+    }
+
+    pub fn to_spacecraft(&self) -> &Spacecraft {
+        match self {
+            Entity::Spacecraft(spacecraft) => spacecraft,
+            _ => panic!("entity is not a spacecraft"),
+        }
+    }
+
+    pub fn to_spacecraft_mut(&mut self) -> &mut Spacecraft {
+        match self {
+            Entity::Spacecraft(spacecraft) => spacecraft,
+            _ => panic!("entity is not a spacecraft"),
+        }
+    }
+
+    pub fn as_asteroid(&self) -> Option<&Asteroid> {
+        match self {
+            Entity::Asteroid(asteroid) => Some(asteroid),
+            _ => None,
+        }
+    }
+
+    pub fn to_asteroid(&self) -> &Asteroid {
+        match self {
+            Entity::Asteroid(asteroid) => asteroid,
+            _ => panic!("entity is not a asteroid"),
+        }
+    }
+
+    pub fn to_asteroid_mut(&mut self) -> &mut Asteroid {
+        match self {
+            Entity::Asteroid(asteroid) => asteroid,
+            _ => panic!("entity is not a asteroid"),
+        }
+    }
+}
+
 impl From<Camera> for Entity {
     fn from(camera: Camera) -> Self {
         Entity::Camera(camera)
@@ -114,18 +179,76 @@ impl From<Asteroid> for Entity {
     }
 }
 
+pub struct UpdateContext<'a> {
+    delta: f32,
+    entities: &'a mut Vec<Option<Entity>>,
+    current_entity_id: EntityId,
+}
+
+impl UpdateContext<'_> {
+    pub fn delta(&self) -> f32 {
+        self.delta
+    }
+
+    pub fn current_entity(&self) -> &Entity {
+        self.entities
+            .get(self.current_entity_id)
+            .and_then(|slot| slot.as_ref())
+            .expect("invalid current entity")
+    }
+
+    pub fn get_entity(&self, entity_id: EntityId) -> Option<&Entity> {
+        self.entities.get(entity_id).and_then(|slot| slot.as_ref())
+    }
+
+    pub fn modify<F>(self, func: F)
+    where
+        F: FnOnce(&mut Entity),
+    {
+        let entity = self
+            .entities
+            .get_mut(self.current_entity_id)
+            .and_then(|slot| slot.as_mut())
+            .expect("invalid current entity");
+
+        func(entity);
+    }
+}
+
+pub struct UpdateFunc(Box<dyn Fn(UpdateContext)>);
+
+unsafe impl Send for UpdateFunc {}
+
+impl<F> From<F> for UpdateFunc
+where
+    F: Fn(UpdateContext) + 'static,
+{
+    fn from(func: F) -> Self {
+        let func = Box::new(func);
+
+        UpdateFunc(func)
+    }
+}
+
 pub struct Entities {
     event_sender: Sender<Event>,
     entities: Mutex<Vec<Option<Entity>>>,
+    update_funcs: Mutex<Vec<UpdateFunc>>,
 }
 
 impl Entities {
-    pub fn new(event_dispatcher: &Dispatcher<Event>) -> Arc<Entities> {
+    pub fn new<F, I>(event_dispatcher: &Dispatcher<Event>, update_funcs: I) -> Arc<Entities>
+    where
+        F: Into<UpdateFunc>,
+        I: IntoIterator<Item = F>,
+    {
         let event_sender = event_dispatcher.create_sender();
+        let update_funcs = update_funcs.into_iter().map(|func| func.into()).collect();
 
         let entities = Entities {
             event_sender,
             entities: Default::default(),
+            update_funcs: Mutex::new(update_funcs),
         };
 
         Arc::new(entities)
@@ -156,6 +279,32 @@ impl Entities {
         index
     }
 
+    pub fn update(&self, delta: f32) {
+        let mut entities = self.entities.lock().unwrap();
+        let update_funcs = self.update_funcs.lock().unwrap();
+
+        let entity_ids: Vec<EntityId> = entities
+            .iter()
+            .enumerate()
+            .filter_map(|(entity_id, slot)| match slot.is_some() {
+                true => Some(entity_id),
+                false => None,
+            })
+            .collect();
+
+        for entity_id in entity_ids {
+            update_funcs.iter().for_each(|UpdateFunc(func)| {
+                let context = UpdateContext {
+                    delta,
+                    entities: &mut entities,
+                    current_entity_id: entity_id,
+                };
+
+                func(context);
+            });
+        }
+    }
+
     pub fn destroy(&self, entity_id: EntityId) {
         let mut entities = self.entities.lock().unwrap();
 
@@ -171,12 +320,24 @@ impl Entities {
 mod tests {
     use crate::dispatch::{Dispatcher, Event};
 
-    use super::{Entities, Spacecraft};
+    use super::{Entities, Entity, Spacecraft, UpdateContext};
 
     #[test]
     fn entities_test() {
+        const DELTA: f32 = 0.42;
+
         let dispatcher = Dispatcher::new();
-        let entities = Entities::new(&dispatcher);
+        let entities = Entities::new(
+            &dispatcher,
+            [|context: UpdateContext| {
+                assert_eq!(context.delta(), DELTA);
+
+                match context.current_entity() {
+                    Entity::Spacecraft(_) => {}
+                    _ => panic!("entity is not spacecraft"),
+                };
+            }],
+        );
 
         let entity_id = entities.create(Spacecraft::default());
 
@@ -187,6 +348,9 @@ mod tests {
         });
         dispatcher.dispatch();
 
+        entities.update(DELTA);
+
         entities.destroy(entity_id);
+        dispatcher.dispatch();
     }
 }
