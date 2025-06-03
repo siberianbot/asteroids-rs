@@ -12,11 +12,11 @@ Legend:
             - [+] Add winit
             - [+] Show a window
 
-        - Vulkan
-            - R&D: suitable rendering library for Rust?
-                - vulkano?
-                - ash-rs?
-            - VK backend initialization
+        - [~] Vulkan
+            - [+] R&D: suitable rendering library for Rust?
+                - [ACCEPTED] vulkano?
+                - [DISCARDED - too low level and unsafe] ash-rs? 
+            - [~] VK backend initialization
             - VK renderer initialization
 
         - Shaders

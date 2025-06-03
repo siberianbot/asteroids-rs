@@ -11,6 +11,7 @@ use winit::{
 use crate::{
     dispatch::{Command, Dispatcher, Event, Sender},
     game::Game,
+    rendering::backend::Backend,
     worker::Worker,
 };
 
@@ -22,15 +23,18 @@ enum AppEvent {
 struct Inner {
     command_sender: Sender<Command>,
     window: Arc<Window>,
+    backend: Arc<Backend>,
 }
 
 impl Inner {
     fn new(command_dispatcher: &Dispatcher<Command>, event_loop: &ActiveEventLoop) -> Inner {
         let window = Inner::init_window(event_loop);
+        let backend = Backend::new(event_loop, window.clone());
 
         let inner = Inner {
             command_sender: command_dispatcher.create_sender(),
             window,
+            backend,
         };
 
         inner
