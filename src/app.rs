@@ -21,26 +21,15 @@ enum AppEvent {
 
 struct Inner {
     command_sender: Sender<Command>,
-
-    _dispatcher_worker: Worker,
-
     window: Arc<Window>,
 }
 
 impl Inner {
-    fn new(
-        command_dispatcher: Arc<Dispatcher<Command>>,
-        event_dispatcher: Arc<Dispatcher<Event>>,
-        event_loop: &ActiveEventLoop,
-    ) -> Inner {
+    fn new(command_dispatcher: &Dispatcher<Command>, event_loop: &ActiveEventLoop) -> Inner {
         let window = Inner::init_window(event_loop);
-        let dispatcher_worker = Inner::init_dispatch(command_dispatcher.clone(), event_dispatcher);
 
         let inner = Inner {
             command_sender: command_dispatcher.create_sender(),
-
-            _dispatcher_worker: dispatcher_worker,
-
             window,
         };
 
@@ -57,18 +46,6 @@ impl Inner {
             .expect("failed to create window");
 
         Arc::new(window)
-    }
-
-    fn init_dispatch(
-        command_dispatcher: Arc<Dispatcher<Command>>,
-        event_dispatcher: Arc<Dispatcher<Event>>,
-    ) -> Worker {
-        Worker::spawn("Dispatcher", move |alive| {
-            while alive.load(Ordering::Relaxed) {
-                command_dispatcher.dispatch();
-                event_dispatcher.dispatch();
-            }
-        })
     }
 
     fn dispatch_window_event(&mut self, _: &ActiveEventLoop, event: WindowEvent) {
@@ -91,6 +68,8 @@ impl Inner {
 struct App {
     command_dispatcher: Arc<Dispatcher<Command>>,
     event_dispatcher: Arc<Dispatcher<Event>>,
+    _dispatcher_worker: Worker,
+
     _game: Arc<Game>,
 
     inner: Option<Inner>,
@@ -101,8 +80,6 @@ impl App {
         let command_dispatcher = Dispatcher::new();
         let event_dispatcher = Dispatcher::new();
 
-        let game = Game::new(&command_dispatcher, &event_dispatcher);
-
         command_dispatcher.add_handler(move |command: &Command| match command {
             Command::Exit => proxy
                 .send_event(AppEvent::Exit)
@@ -111,10 +88,27 @@ impl App {
             _ => {}
         });
 
+        let dispatcher_worker = {
+            let command_dispatcher = command_dispatcher.clone();
+            let event_dispatcher = event_dispatcher.clone();
+
+            Worker::spawn("Dispatcher", move |alive| {
+                while alive.load(Ordering::Relaxed) {
+                    command_dispatcher.dispatch();
+                    event_dispatcher.dispatch();
+                }
+            })
+        };
+
+        let game = Game::new(&command_dispatcher, &event_dispatcher);
+
         let app = App {
             command_dispatcher,
             event_dispatcher,
+            _dispatcher_worker: dispatcher_worker,
+
             _game: game,
+
             inner: Default::default(),
         };
 
@@ -124,11 +118,7 @@ impl App {
 
 impl ApplicationHandler<AppEvent> for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        let inner = Inner::new(
-            self.command_dispatcher.clone(),
-            self.event_dispatcher.clone(),
-            event_loop,
-        );
+        let inner = Inner::new(&self.command_dispatcher, event_loop);
 
         self.inner = Some(inner);
     }
