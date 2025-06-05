@@ -54,6 +54,11 @@ impl Inner {
 
     fn dispatch_window_event(&mut self, _: &ActiveEventLoop, event: WindowEvent) {
         match event {
+            WindowEvent::Resized(size) => {
+                // TODO: introduce command?
+                self.backend.resize(Some(size.into()));
+            }
+
             WindowEvent::RedrawRequested => {
                 // TODO: redraw
 
