@@ -1,20 +1,28 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     ops::Add,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, MutexGuard},
 };
 
 use vulkano::{
-    VulkanLibrary,
+    Validated, VulkanError, VulkanLibrary,
+    command_buffer::{
+        PrimaryCommandBufferAbstract,
+        allocator::{CommandBufferAllocator, StandardCommandBufferAllocator},
+    },
     device::{
         Device, DeviceCreateInfo, DeviceExtensions, DeviceFeatures, Queue, QueueCreateInfo,
         QueueFlags,
         physical::{PhysicalDevice as VkPhysicalDevice, PhysicalDeviceType},
     },
     format::Format,
-    image::{Image, ImageUsage},
+    image::{Image, ImageUsage, view::ImageView},
     instance::{Instance, InstanceCreateInfo},
-    swapchain::{ColorSpace, Surface, Swapchain as VkSwapchain, SwapchainCreateInfo},
+    swapchain::{
+        ColorSpace, Surface, Swapchain as VkSwapchain, SwapchainAcquireFuture, SwapchainCreateInfo,
+        SwapchainPresentInfo, acquire_next_image,
+    },
+    sync::{self, GpuFuture},
 };
 use winit::{event_loop::ActiveEventLoop, window::Window};
 
@@ -151,6 +159,7 @@ struct Swapchain {
     window: Arc<Window>,
     handle: Arc<VkSwapchain>,
     images: Vec<Arc<Image>>,
+    image_views: Vec<Arc<ImageView>>,
     min_extent: [u32; 2],
     max_extent: [u32; 2],
     format: Format,
@@ -205,10 +214,20 @@ impl Swapchain {
             VkSwapchain::new(logical_device.handle.clone(), surface, create_info)
                 .expect("failed to create swapchain");
 
+        let image_views = images
+            .iter()
+            .cloned()
+            .map(|image| {
+                ImageView::new_default(image)
+                    .expect("failed to create image view for swapchain image")
+            })
+            .collect();
+
         let swapchain = Swapchain {
             window,
             handle,
             images,
+            image_views,
             min_extent: surface_capabilities.min_image_extent,
             max_extent: surface_capabilities.max_image_extent,
             format: surface_format,
@@ -238,6 +257,65 @@ impl Swapchain {
 
         self.handle = handle;
         self.images = images;
+        self.image_views = self
+            .images
+            .iter()
+            .cloned()
+            .map(|image| {
+                ImageView::new_default(image)
+                    .expect("failed to create image view for swapchain image")
+            })
+            .collect();
+    }
+}
+
+pub struct Frame<'a> {
+    device: Arc<Device>,
+    graphics_queue: Arc<Queue>,
+    present_queue: Arc<Queue>,
+    swapchain: MutexGuard<'a, Swapchain>,
+    image_index: u32,
+    image_view: Arc<ImageView>,
+    suboptimal: bool,
+    acquire_future: SwapchainAcquireFuture,
+}
+
+impl Frame<'_> {
+    pub fn image_view(&self) -> Arc<ImageView> {
+        self.image_view.clone()
+    }
+
+    pub fn submit<CB>(mut self, command_buffer: Arc<CB>)
+    where
+        CB: PrimaryCommandBufferAbstract + 'static,
+    {
+        let result = sync::now(self.device)
+            .join(self.acquire_future)
+            .then_execute(self.graphics_queue, command_buffer)
+            .expect("failed to execute command buffer")
+            .then_swapchain_present(
+                self.present_queue,
+                SwapchainPresentInfo::swapchain_image_index(
+                    self.swapchain.handle.clone(),
+                    self.image_index,
+                ),
+            )
+            .then_signal_fence_and_flush()
+            .map_err(Validated::unwrap);
+
+        let should_recreate = match result {
+            Err(VulkanError::OutOfDate) => true,
+            result => {
+                result.expect("failed to submit frame").cleanup_finished();
+                self.suboptimal
+            }
+        };
+
+        if !should_recreate {
+            return;
+        }
+
+        self.swapchain.recreate(None);
     }
 }
 
@@ -292,9 +370,52 @@ impl Backend {
         Arc::new(backend)
     }
 
-    pub fn resize(&self, size: Option<[u32; 2]>) {
+    pub fn graphics_queue_family_index(&self) -> u32 {
+        self.physical_device.graphics_queue_family_index
+    }
+
+    pub fn recreate_swapchain(&self, size: Option<[u32; 2]>) {
         let mut swapchain = self.swapchain.lock().unwrap();
 
         swapchain.recreate(size);
+    }
+
+    pub fn create_command_buffer_allocator(&self) -> Arc<dyn CommandBufferAllocator> {
+        let allocator = StandardCommandBufferAllocator::new(
+            self.logical_device.handle.clone(),
+            Default::default(),
+        );
+
+        Arc::new(allocator)
+    }
+
+    pub fn acquire_frame(&self) -> Option<Frame> {
+        let swapchain = self.swapchain.lock().unwrap();
+
+        let (image_index, suboptimal, acquire_future) =
+            match acquire_next_image(swapchain.handle.clone(), None).map_err(Validated::unwrap) {
+                Err(VulkanError::OutOfDate) => {
+                    return None;
+                }
+
+                result => result.expect("failed to acquire next frame"),
+            };
+
+        let frame = Frame {
+            device: self.logical_device.handle.clone(),
+            graphics_queue: self.logical_device.graphics_queue.clone(),
+            present_queue: self.logical_device.present_queue.clone(),
+            image_index,
+            image_view: swapchain
+                .image_views
+                .get(image_index as usize)
+                .cloned()
+                .expect("invalid swapchain image index"),
+            suboptimal,
+            acquire_future,
+            swapchain,
+        };
+
+        Some(frame)
     }
 }

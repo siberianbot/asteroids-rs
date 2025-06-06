@@ -11,7 +11,7 @@ use winit::{
 use crate::{
     dispatch::{Command, Dispatcher, Event, Sender},
     game::Game,
-    rendering::backend::Backend,
+    rendering::{backend::Backend, renderer::Renderer},
     worker::Worker,
 };
 
@@ -24,17 +24,21 @@ struct Inner {
     command_sender: Sender<Command>,
     window: Arc<Window>,
     backend: Arc<Backend>,
+    _renderer: Renderer,
 }
 
 impl Inner {
     fn new(command_dispatcher: &Dispatcher<Command>, event_loop: &ActiveEventLoop) -> Inner {
         let window = Inner::init_window(event_loop);
+
         let backend = Backend::new(event_loop, window.clone());
+        let renderer = Renderer::new(backend.clone());
 
         let inner = Inner {
             command_sender: command_dispatcher.create_sender(),
             window,
             backend,
+            _renderer: renderer,
         };
 
         inner
@@ -56,7 +60,7 @@ impl Inner {
         match event {
             WindowEvent::Resized(size) => {
                 // TODO: introduce command?
-                self.backend.resize(Some(size.into()));
+                self.backend.recreate_swapchain(Some(size.into()));
             }
 
             WindowEvent::RedrawRequested => {
