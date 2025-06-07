@@ -17,7 +17,7 @@ Legend:
                 - [ACCEPTED] vulkano?
                 - [DISCARDED - too low level and unsafe] ash-rs? 
             - [~] VK backend initialization
-            - VK renderer initialization
+            - [~] VK renderer initialization
 
         - Shaders
             - Entities rendering
