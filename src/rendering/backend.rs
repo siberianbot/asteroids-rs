@@ -30,6 +30,8 @@ use vulkano::{
 };
 use winit::{event_loop::ActiveEventLoop, window::Window};
 
+use crate::dispatch::{Dispatcher, Event};
+
 const DEVICE_EXTENSIONS: DeviceExtensions = DeviceExtensions {
     khr_swapchain: true,
     khr_dynamic_rendering: true,
@@ -331,7 +333,11 @@ pub struct Backend {
 }
 
 impl Backend {
-    pub fn new(event_loop: &ActiveEventLoop, window: Arc<Window>) -> Arc<Backend> {
+    pub fn new(
+        event_dispatcher: &Dispatcher<Event>,
+        event_loop: &ActiveEventLoop,
+        window: Arc<Window>,
+    ) -> Arc<Backend> {
         let library = VulkanLibrary::new().expect("there is no Vulkan");
         let required_extensions =
             Surface::required_extensions(event_loop).expect("failed to get required extensions");
@@ -375,7 +381,19 @@ impl Backend {
             swapchain: Mutex::new(swapchain),
         };
 
-        Arc::new(backend)
+        let backend = Arc::new(backend);
+
+        {
+            let backend = backend.clone();
+
+            event_dispatcher.add_handler(move |event| {
+                if let Event::WindowResized(size) = event {
+                    backend.recreate_swapchain(Some(*size))
+                }
+            });
+        }
+
+        backend
     }
 
     pub fn graphics_queue_family_index(&self) -> u32 {

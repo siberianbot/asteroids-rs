@@ -22,20 +22,26 @@ enum AppEvent {
 
 struct Inner {
     command_sender: Sender<Command>,
+    event_sender: Sender<Event>,
     window: Arc<Window>,
     backend: Arc<Backend>,
     _renderer: Renderer,
 }
 
 impl Inner {
-    fn new(command_dispatcher: &Dispatcher<Command>, event_loop: &ActiveEventLoop) -> Inner {
+    fn new(
+        command_dispatcher: &Dispatcher<Command>,
+        event_dispatcher: &Dispatcher<Event>,
+        event_loop: &ActiveEventLoop,
+    ) -> Inner {
         let window = Inner::init_window(event_loop);
 
-        let backend = Backend::new(event_loop, window.clone());
+        let backend = Backend::new(event_dispatcher, event_loop, window.clone());
         let renderer = Renderer::new(backend.clone());
 
         let inner = Inner {
             command_sender: command_dispatcher.create_sender(),
+            event_sender: event_dispatcher.create_sender(),
             window,
             backend,
             _renderer: renderer,
@@ -59,8 +65,7 @@ impl Inner {
     fn dispatch_window_event(&mut self, _: &ActiveEventLoop, event: WindowEvent) {
         match event {
             WindowEvent::Resized(size) => {
-                // TODO: introduce command?
-                self.backend.recreate_swapchain(Some(size.into()));
+                self.event_sender.send(Event::WindowResized(size.into()));
             }
 
             WindowEvent::RedrawRequested => {
@@ -131,7 +136,7 @@ impl App {
 
 impl ApplicationHandler<AppEvent> for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        let inner = Inner::new(&self.command_dispatcher, event_loop);
+        let inner = Inner::new(&self.command_dispatcher, &self.event_dispatcher, event_loop);
 
         self.inner = Some(inner);
     }

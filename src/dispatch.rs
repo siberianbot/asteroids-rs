@@ -84,6 +84,7 @@ pub enum Command {
 #[derive(Debug, PartialEq)]
 #[non_exhaustive]
 pub enum Event {
+    WindowResized([u32; 2]),
     EntityCreated(EntityId),
     EntityDestroyed(EntityId),
     CollisionDetected(/* TODO */),
