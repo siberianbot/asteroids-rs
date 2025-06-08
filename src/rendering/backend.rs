@@ -6,6 +6,7 @@ use std::{
 
 use vulkano::{
     Validated, VulkanError, VulkanLibrary,
+    buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage, Subbuffer},
     command_buffer::{
         PrimaryCommandBufferAbstract,
         allocator::{CommandBufferAllocator, StandardCommandBufferAllocator},
@@ -18,6 +19,9 @@ use vulkano::{
     format::Format,
     image::{Image, ImageUsage, view::ImageView},
     instance::{Instance, InstanceCreateInfo},
+    memory::allocator::{
+        AllocationCreateInfo, MemoryAllocator, MemoryTypeFilter, StandardMemoryAllocator,
+    },
     swapchain::{
         ColorSpace, Surface, Swapchain as VkSwapchain, SwapchainAcquireFuture, SwapchainCreateInfo,
         SwapchainPresentInfo, acquire_next_image,
@@ -322,6 +326,7 @@ impl Frame<'_> {
 pub struct Backend {
     physical_device: PhysicalDevice,
     logical_device: LogicalDevice,
+    memory_allocator: Arc<dyn MemoryAllocator>,
     swapchain: Mutex<Swapchain>,
 }
 
@@ -359,11 +364,14 @@ impl Backend {
             .expect("no suitable physical device available");
 
         let logical_device = LogicalDevice::new(&physical_device);
+        let memory_allocator = StandardMemoryAllocator::new_default(logical_device.handle.clone());
+
         let swapchain = Swapchain::new(&physical_device, &logical_device, surface, window);
 
         let backend = Backend {
             physical_device,
             logical_device,
+            memory_allocator: Arc::new(memory_allocator),
             swapchain: Mutex::new(swapchain),
         };
 
@@ -387,6 +395,32 @@ impl Backend {
         );
 
         Arc::new(allocator)
+    }
+
+    pub fn create_buffer<Item>(&self, count: usize, usage: BufferUsage) -> Subbuffer<[Item]>
+    where
+        Item: BufferContents + Sized,
+    {
+        let create_info = BufferCreateInfo {
+            usage,
+            ..Default::default()
+        };
+
+        let allocation_info = AllocationCreateInfo {
+            memory_type_filter: MemoryTypeFilter::HOST_RANDOM_ACCESS
+                | MemoryTypeFilter::PREFER_HOST,
+            ..Default::default()
+        };
+
+        let buffer = Buffer::new_slice(
+            self.memory_allocator.clone(),
+            create_info,
+            allocation_info,
+            count as u64,
+        )
+        .expect("failed to create buffer");
+
+        buffer
     }
 
     pub fn acquire_frame(&self) -> Option<Frame> {

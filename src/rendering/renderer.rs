@@ -1,6 +1,7 @@
 use std::sync::{Arc, atomic::Ordering};
 
 use vulkano::{
+    buffer::{BufferUsage, Subbuffer},
     command_buffer::{
         AutoCommandBufferBuilder, CommandBufferUsage, RenderingAttachmentInfo, RenderingInfo,
         allocator::CommandBufferAllocator,
@@ -11,10 +12,11 @@ use vulkano::{
 
 use crate::worker::Worker;
 
-use super::backend::Backend;
+use super::{backend::Backend, shaders::Object};
 
 struct Inner {
     backend: Arc<Backend>,
+    objects_buffer: Subbuffer<[Object]>,
     command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
 }
 
@@ -22,6 +24,7 @@ impl Inner {
     fn new(backend: Arc<Backend>) -> Inner {
         let inner = Inner {
             command_buffer_allocator: backend.create_command_buffer_allocator(),
+            objects_buffer: backend.create_buffer(1024, BufferUsage::UNIFORM_BUFFER),
             backend,
         };
 
