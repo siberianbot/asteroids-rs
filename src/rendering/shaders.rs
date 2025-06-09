@@ -5,12 +5,13 @@ use vulkano::{buffer::BufferContents, pipeline::graphics::vertex_input::Vertex a
 #[repr(C)]
 pub struct Vertex {
     #[format(R32G32_SFLOAT)]
+    #[name("in_position")]
     position: Vec2,
 }
 
 #[derive(BufferContents)]
 #[repr(C)]
-pub struct Object {
+pub struct Entity {
     color: Vec3,
     matrix: Mat4,
 }
@@ -23,17 +24,17 @@ pub mod entity_vs {
 
 layout (location = 0) in vec2 in_position;
 
-layout (binding = 0) uniform Object {
+layout (binding = 0) uniform Entity {
     vec3 color;
     mat4 matrix;
-} object;
+} entity;
 
 layout (location = 0) out vec3 out_color;
 
 void main() {
-    gl_Position = object.matrix * vec4(in_position, 0.0, 1.0);
+    gl_Position = entity.matrix * vec4(in_position, 0.0, 1.0);
 
-    out_color = object.color;
+    out_color = entity.color;
 }
         "
     }

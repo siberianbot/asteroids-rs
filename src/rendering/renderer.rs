@@ -7,16 +7,24 @@ use vulkano::{
         allocator::CommandBufferAllocator,
     },
     format::ClearValue,
+    pipeline::GraphicsPipeline,
     render_pass::{AttachmentLoadOp, AttachmentStoreOp},
 };
 
-use crate::worker::Worker;
+use crate::{
+    rendering::{
+        backend::{ShaderFactory, ShaderStage},
+        shaders::{entity_fs, entity_vs},
+    },
+    worker::Worker,
+};
 
-use super::{backend::Backend, shaders::Object};
+use super::{backend::Backend, shaders::Entity};
 
 struct Inner {
     backend: Arc<Backend>,
-    objects_buffer: Subbuffer<[Object]>,
+    entity_pipeline: Arc<GraphicsPipeline>,
+    entity_buffer: Subbuffer<[Entity]>,
     command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
 }
 
@@ -24,7 +32,11 @@ impl Inner {
     fn new(backend: Arc<Backend>) -> Inner {
         let inner = Inner {
             command_buffer_allocator: backend.create_command_buffer_allocator(),
-            objects_buffer: backend.create_buffer(1024, BufferUsage::UNIFORM_BUFFER),
+            entity_pipeline: backend.create_pipeline([
+                (ShaderStage::Vertex, entity_vs::load as ShaderFactory),
+                (ShaderStage::Fragment, entity_fs::load as ShaderFactory),
+            ]),
+            entity_buffer: backend.create_buffer(1024, BufferUsage::UNIFORM_BUFFER),
             backend,
         };
 

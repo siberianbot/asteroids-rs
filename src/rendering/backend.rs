@@ -22,6 +22,18 @@ use vulkano::{
     memory::allocator::{
         AllocationCreateInfo, MemoryAllocator, MemoryTypeFilter, StandardMemoryAllocator,
     },
+    pipeline::{
+        DynamicState, GraphicsPipeline, PipelineLayout, PipelineShaderStageCreateInfo,
+        graphics::{
+            GraphicsPipelineCreateInfo,
+            color_blend::ColorBlendState,
+            subpass::{PipelineRenderingCreateInfo, PipelineSubpassType},
+            vertex_input::{Vertex as VertexTrait, VertexDefinition},
+            viewport::{Viewport, ViewportState},
+        },
+        layout::PipelineDescriptorSetLayoutCreateInfo,
+    },
+    shader::{EntryPoint, ShaderModule},
     swapchain::{
         ColorSpace, Surface, Swapchain as VkSwapchain, SwapchainAcquireFuture, SwapchainCreateInfo,
         SwapchainPresentInfo, acquire_next_image,
@@ -30,7 +42,10 @@ use vulkano::{
 };
 use winit::{event_loop::ActiveEventLoop, window::Window};
 
-use crate::dispatch::{Dispatcher, Event};
+use crate::{
+    dispatch::{Dispatcher, Event},
+    rendering::shaders::Vertex,
+};
 
 const DEVICE_EXTENSIONS: DeviceExtensions = DeviceExtensions {
     khr_swapchain: true,
@@ -275,6 +290,14 @@ impl Swapchain {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ShaderStage {
+    Vertex,
+    Fragment,
+}
+
+pub type ShaderFactory = fn(Arc<Device>) -> Result<Arc<ShaderModule>, Validated<VulkanError>>;
+
 pub struct Frame<'a> {
     device: Arc<Device>,
     graphics_queue: Arc<Queue>,
@@ -439,6 +462,75 @@ impl Backend {
         .expect("failed to create buffer");
 
         buffer
+    }
+
+    pub fn create_pipeline<I, F>(&self, shaders_iter: I) -> Arc<GraphicsPipeline>
+    where
+        I: IntoIterator<Item = (ShaderStage, F)>,
+        F: FnOnce(Arc<Device>) -> Result<Arc<ShaderModule>, Validated<VulkanError>>,
+    {
+        let shaders: BTreeMap<ShaderStage, (Arc<ShaderModule>, EntryPoint)> = shaders_iter
+            .into_iter()
+            .map(|(stage, shader_factory)| {
+                let module = shader_factory(self.logical_device.handle.clone())
+                    .expect("failed to construct shader");
+                let entry_point = module
+                    .entry_point("main")
+                    .expect("shader has no main function");
+
+                (stage, (module, entry_point))
+            })
+            .collect();
+
+        let (_, vertex_entry_point) = shaders
+            .get(&ShaderStage::Vertex)
+            .expect("there is no vertex shader stage");
+        let vertex_input_state = Vertex::per_vertex()
+            .definition(vertex_entry_point)
+            .expect("failed to construct vertex input state");
+
+        let stages: Vec<_> = shaders
+            .iter()
+            .map(|(_, (_, entry_point))| PipelineShaderStageCreateInfo::new(entry_point.clone()))
+            .collect();
+
+        let create_info = PipelineDescriptorSetLayoutCreateInfo::from_stages(&stages)
+            .into_pipeline_layout_create_info(self.logical_device.handle.clone())
+            .expect("failed to construct pipeline create info");
+        let pipeline_layout = PipelineLayout::new(self.logical_device.handle.clone(), create_info)
+            .expect("failed to create pipeline layout");
+
+        let swapchain = self.swapchain.lock().unwrap();
+
+        let create_info = GraphicsPipelineCreateInfo {
+            stages: stages.into_iter().collect(),
+            vertex_input_state: Some(vertex_input_state),
+            input_assembly_state: Some(Default::default()),
+            rasterization_state: Some(Default::default()),
+            multisample_state: Some(Default::default()),
+            viewport_state: Some(ViewportState {
+                viewports: vec![Viewport::default()].into(),
+
+                ..Default::default()
+            }),
+            color_blend_state: Some(ColorBlendState::with_attachment_states(
+                1,
+                Default::default(),
+            )),
+            dynamic_state: [DynamicState::Viewport].into_iter().collect(),
+            subpass: Some(PipelineSubpassType::BeginRendering(
+                PipelineRenderingCreateInfo {
+                    color_attachment_formats: vec![Some(swapchain.format)],
+                    ..PipelineRenderingCreateInfo::default()
+                },
+            )),
+
+            ..GraphicsPipelineCreateInfo::layout(pipeline_layout)
+        };
+        let pipeline = GraphicsPipeline::new(self.logical_device.handle.clone(), None, create_info)
+            .expect("failed to create graphics pipeline");
+
+        pipeline
     }
 
     pub fn acquire_frame(&self) -> Option<Frame> {
