@@ -1,4 +1,7 @@
-use std::sync::{Arc, atomic::Ordering};
+use std::sync::{
+    Arc, Mutex,
+    atomic::{AtomicBool, Ordering},
+};
 
 use vulkano::{
     buffer::{BufferUsage, Subbuffer},
@@ -12,6 +15,7 @@ use vulkano::{
 };
 
 use crate::{
+    dispatch::{Dispatcher, Event},
     game::Game,
     rendering::{
         backend::{ShaderFactory, ShaderStage},
@@ -25,15 +29,19 @@ use super::{backend::Backend, shaders::Entity};
 struct Inner {
     game: Arc<Game>,
     backend: Arc<Backend>,
+    recreate_swapchain: AtomicBool,
+    recreate_swapchain_size: Mutex<[u32; 2]>,
     entity_pipeline: Arc<GraphicsPipeline>,
     entity_buffer: Subbuffer<[Entity]>,
     command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
 }
 
 impl Inner {
-    fn new(game: Arc<Game>, backend: Arc<Backend>) -> Inner {
+    fn new(game: Arc<Game>, backend: Arc<Backend>) -> Arc<Inner> {
         let inner = Inner {
             game,
+            recreate_swapchain: AtomicBool::new(false),
+            recreate_swapchain_size: Mutex::new([0, 0]),
             command_buffer_allocator: backend.create_command_buffer_allocator(),
             entity_pipeline: backend.create_pipeline([
                 (ShaderStage::Vertex, entity_vs::load as ShaderFactory),
@@ -43,10 +51,17 @@ impl Inner {
             backend,
         };
 
-        inner
+        Arc::new(inner)
     }
 
     fn render(&self) {
+        if self.recreate_swapchain.load(Ordering::Acquire) {
+            let size = self.recreate_swapchain_size.lock().unwrap();
+            self.backend.recreate_swapchain(Some(*size));
+
+            self.recreate_swapchain.store(false, Ordering::Release);
+        }
+
         match self.backend.acquire_frame() {
             Some(frame) => {
                 let mut command_buffer_builder = AutoCommandBufferBuilder::primary(
@@ -104,15 +119,35 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    pub fn new(game: Arc<Game>, backend: Arc<Backend>) -> Renderer {
-        let renderer = Renderer {
-            _worker: Worker::spawn("Renderer", move |alive| {
-                let inner = Inner::new(game, backend);
+    pub fn new(
+        event_dispatcher: &Dispatcher<Event>,
+        game: Arc<Game>,
+        backend: Arc<Backend>,
+    ) -> Renderer {
+        let inner = Inner::new(game, backend);
 
-                while alive.load(Ordering::Relaxed) {
-                    inner.render();
+        {
+            let inner = inner.clone();
+
+            event_dispatcher.add_handler(move |event| {
+                if let Event::WindowResized(size) = event {
+                    *inner.recreate_swapchain_size.lock().unwrap() = *size;
+
+                    inner.recreate_swapchain.store(true, Ordering::Relaxed);
                 }
-            }),
+            });
+        }
+
+        let renderer = {
+            let inner = inner.clone();
+
+            Renderer {
+                _worker: Worker::spawn("Renderer", move |alive| {
+                    while alive.load(Ordering::Relaxed) {
+                        inner.render();
+                    }
+                }),
+            }
         };
 
         renderer

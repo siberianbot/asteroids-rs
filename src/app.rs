@@ -37,8 +37,8 @@ impl Inner {
     ) -> Inner {
         let window = Inner::init_window(event_loop);
 
-        let backend = Backend::new(event_dispatcher, event_loop, window.clone());
-        let renderer = Renderer::new(game, backend.clone());
+        let backend = Backend::new(event_loop, window.clone());
+        let renderer = Renderer::new(event_dispatcher, game, backend.clone());
 
         let inner = Inner {
             command_sender: command_dispatcher.create_sender(),
