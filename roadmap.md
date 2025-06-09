@@ -16,12 +16,14 @@ Legend:
             - [+] R&D: suitable rendering library for Rust?
                 - [ACCEPTED] vulkano?
                 - [DISCARDED - too low level and unsafe] ash-rs? 
-            - [~] VK backend initialization
+            - [+] VK backend initialization
             - [~] VK renderer initialization
 
-        - Shaders
-            - Entities rendering
+        - [~] Shaders
+            - [~] Entities rendering
             - UI rendering
+
+        - Entities rendering
 
         - Utils for various purposes
             - Texture atlas
