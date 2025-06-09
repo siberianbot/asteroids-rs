@@ -7,11 +7,12 @@ use vulkano::{
         allocator::CommandBufferAllocator,
     },
     format::ClearValue,
-    pipeline::GraphicsPipeline,
+    pipeline::{GraphicsPipeline, graphics::viewport::Viewport},
     render_pass::{AttachmentLoadOp, AttachmentStoreOp},
 };
 
 use crate::{
+    game::Game,
     rendering::{
         backend::{ShaderFactory, ShaderStage},
         shaders::{entity_fs, entity_vs},
@@ -22,6 +23,7 @@ use crate::{
 use super::{backend::Backend, shaders::Entity};
 
 struct Inner {
+    game: Arc<Game>,
     backend: Arc<Backend>,
     entity_pipeline: Arc<GraphicsPipeline>,
     entity_buffer: Subbuffer<[Entity]>,
@@ -29,8 +31,9 @@ struct Inner {
 }
 
 impl Inner {
-    fn new(backend: Arc<Backend>) -> Inner {
+    fn new(game: Arc<Game>, backend: Arc<Backend>) -> Inner {
         let inner = Inner {
+            game,
             command_buffer_allocator: backend.create_command_buffer_allocator(),
             entity_pipeline: backend.create_pipeline([
                 (ShaderStage::Vertex, entity_vs::load as ShaderFactory),
@@ -64,7 +67,21 @@ impl Inner {
                         })],
                         ..Default::default()
                     })
-                    .expect("failed to begin rendering")
+                    .expect("failed to begin rendering");
+
+                command_buffer_builder
+                    .set_viewport(
+                        0,
+                        vec![Viewport {
+                            offset: [0.0, 0.0],
+                            extent: frame.extent(),
+                            ..Default::default()
+                        }]
+                        .into(),
+                    )
+                    .expect("failed to set viewport");
+
+                command_buffer_builder
                     .end_rendering()
                     .expect("failed to end rendering");
 
@@ -87,10 +104,10 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    pub fn new(backend: Arc<Backend>) -> Renderer {
+    pub fn new(game: Arc<Game>, backend: Arc<Backend>) -> Renderer {
         let renderer = Renderer {
             _worker: Worker::spawn("Renderer", move |alive| {
-                let inner = Inner::new(backend);
+                let inner = Inner::new(game, backend);
 
                 while alive.load(Ordering::Relaxed) {
                     inner.render();

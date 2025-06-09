@@ -181,6 +181,7 @@ struct Swapchain {
     handle: Arc<VkSwapchain>,
     images: Vec<Arc<Image>>,
     image_views: Vec<Arc<ImageView>>,
+    extent: [u32; 2],
     min_extent: [u32; 2],
     max_extent: [u32; 2],
     format: Format,
@@ -249,6 +250,7 @@ impl Swapchain {
             handle,
             images,
             image_views,
+            extent: size.into(),
             min_extent: surface_capabilities.min_image_extent,
             max_extent: surface_capabilities.max_image_extent,
             format: surface_format,
@@ -287,6 +289,7 @@ impl Swapchain {
                     .expect("failed to create image view for swapchain image")
             })
             .collect();
+        self.extent = [width, height];
     }
 }
 
@@ -303,6 +306,7 @@ pub struct Frame<'a> {
     graphics_queue: Arc<Queue>,
     present_queue: Arc<Queue>,
     swapchain: MutexGuard<'a, Swapchain>,
+    extent: [f32; 2],
     image_index: u32,
     image_view: Arc<ImageView>,
     suboptimal: bool,
@@ -310,6 +314,10 @@ pub struct Frame<'a> {
 }
 
 impl Frame<'_> {
+    pub fn extent(&self) -> [f32; 2] {
+        self.extent
+    }
+
     pub fn image_view(&self) -> Arc<ImageView> {
         self.image_view.clone()
     }
@@ -545,10 +553,13 @@ impl Backend {
                 result => result.expect("failed to acquire next frame"),
             };
 
+        let [width, height] = swapchain.extent;
+
         let frame = Frame {
             device: self.logical_device.handle.clone(),
             graphics_queue: self.logical_device.graphics_queue.clone(),
             present_queue: self.logical_device.present_queue.clone(),
+            extent: [width as f32, height as f32],
             image_index,
             image_view: swapchain
                 .image_views

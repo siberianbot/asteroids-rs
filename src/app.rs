@@ -32,12 +32,13 @@ impl Inner {
     fn new(
         command_dispatcher: &Dispatcher<Command>,
         event_dispatcher: &Dispatcher<Event>,
+        game: Arc<Game>,
         event_loop: &ActiveEventLoop,
     ) -> Inner {
         let window = Inner::init_window(event_loop);
 
         let backend = Backend::new(event_dispatcher, event_loop, window.clone());
-        let renderer = Renderer::new(backend.clone());
+        let renderer = Renderer::new(game, backend.clone());
 
         let inner = Inner {
             command_sender: command_dispatcher.create_sender(),
@@ -69,8 +70,6 @@ impl Inner {
             }
 
             WindowEvent::RedrawRequested => {
-                // TODO: redraw
-
                 self.window.request_redraw();
             }
 
@@ -88,7 +87,7 @@ struct App {
     event_dispatcher: Arc<Dispatcher<Event>>,
     _dispatcher_worker: Worker,
 
-    _game: Arc<Game>,
+    game: Arc<Game>,
 
     inner: Option<Inner>,
 }
@@ -125,7 +124,7 @@ impl App {
             event_dispatcher,
             _dispatcher_worker: dispatcher_worker,
 
-            _game: game,
+            game,
 
             inner: Default::default(),
         };
@@ -136,7 +135,12 @@ impl App {
 
 impl ApplicationHandler<AppEvent> for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        let inner = Inner::new(&self.command_dispatcher, &self.event_dispatcher, event_loop);
+        let inner = Inner::new(
+            &self.command_dispatcher,
+            &self.event_dispatcher,
+            self.game.clone(),
+            event_loop,
+        );
 
         self.inner = Some(inner);
     }
