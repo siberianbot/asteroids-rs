@@ -1,7 +1,4 @@
-use std::sync::{
-    Arc, Mutex,
-    atomic::{AtomicBool, Ordering},
-};
+use std::sync::{Arc, atomic::Ordering};
 
 use vulkano::{
     buffer::{BufferUsage, Subbuffer},
@@ -16,7 +13,7 @@ use vulkano::{
 
 use crate::{
     dispatch::{Dispatcher, Event},
-    game::Game,
+    game::{Game, entities::EntityId},
     rendering::{
         backend::{ShaderFactory, ShaderStage},
         shaders::{entity_fs, entity_vs},
@@ -95,6 +92,14 @@ impl Inner {
             frame.submit(command_buffer);
         }
     }
+
+    fn dispatch_entity_created(&self, entity_id: EntityId) {
+        // TODO
+    }
+
+    fn dispatch_entity_destroyed(&self, entity_id: EntityId) {
+        // TODO
+    }
 }
 
 pub struct Renderer {
@@ -102,11 +107,26 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    pub fn new(game: Arc<Game>, backend: Arc<Backend>) -> Renderer {
+    pub fn new(
+        event_dispatcher: &Dispatcher<Event>,
+        game: Arc<Game>,
+        backend: Arc<Backend>,
+    ) -> Renderer {
+        let inner = Inner::new(game, backend);
+
+        {
+            let inner = inner.clone();
+
+            event_dispatcher.add_handler(move |event| match event {
+                Event::EntityCreated(entity_id) => inner.dispatch_entity_created(*entity_id),
+                Event::EntityDestroyed(entity_id) => inner.dispatch_entity_destroyed(*entity_id),
+
+                _ => {}
+            });
+        }
+
         let renderer = Renderer {
             _worker: Worker::spawn("Renderer", move |alive| {
-                let inner = Inner::new(game, backend);
-
                 while alive.load(Ordering::Relaxed) {
                     inner.render();
                 }

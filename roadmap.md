@@ -23,10 +23,11 @@ Legend:
             - [~] Entities rendering
             - UI rendering
 
-        - Entities rendering
+        - [~] Entities rendering
 
         - Utils for various purposes
             - Texture atlas
+            - Dynamic buffer allocation
             
         - UI rendering
 
