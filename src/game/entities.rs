@@ -6,12 +6,39 @@ use std::{
 
 use glam::{Vec2, vec2};
 
-use crate::dispatch::{Dispatcher, Event, Sender};
+use crate::{
+    dispatch::{Dispatcher, Event, Sender},
+    rendering::shaders::Vertex,
+};
 
 pub type EntityId = usize;
 
+pub const SPACECRAFT_VERTICES: &[Vertex] = &[
+    Vertex {
+        position: Vec2::new(0.0, 0.5),
+    },
+    Vertex {
+        position: Vec2::new(0.35355339, -0.35355339),
+    },
+    Vertex {
+        position: Vec2::new(-0.35355339, -0.35355339),
+    },
+];
+pub const SPACECRAFT_INDICES: &[u32] = &[0, 1, 2];
+
 pub const ASTEROID_SEGMENTS: usize = 8;
 pub const ASTEROID_SEGMENT_RANGE: RangeInclusive<f32> = 0.75..=1.0;
+pub const ASTEROID_INDICES: &[u32] = &[
+    // TODO: try to enumerate in compile-time by using ASTEROID_SEGMENTS value
+    0, 1, 2, //
+    0, 2, 3, //
+    0, 3, 4, //
+    0, 4, 5, //
+    0, 5, 6, //
+    0, 6, 7, //
+    0, 7, 8, //
+    0, 8, 1, //
+];
 
 pub struct Camera {
     pub position: Vec2,

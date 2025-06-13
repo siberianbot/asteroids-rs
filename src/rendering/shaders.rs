@@ -6,7 +6,7 @@ use vulkano::{buffer::BufferContents, pipeline::graphics::vertex_input::Vertex a
 pub struct Vertex {
     #[format(R32G32_SFLOAT)]
     #[name("in_position")]
-    position: Vec2,
+    pub position: Vec2,
 }
 
 #[derive(BufferContents)]
