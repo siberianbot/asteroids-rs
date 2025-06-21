@@ -7,7 +7,7 @@ use entities::{Entities, Entity, UpdateContext};
 
 use crate::{
     dispatch::{Command, Dispatcher, Event},
-    game::entities::{Camera, EntityId},
+    game::entities::{Camera, EntityId, Spacecraft},
     worker::Worker,
 };
 
@@ -42,7 +42,10 @@ impl Game {
         };
 
         let game = Game {
-            camera_entity_id: entities.create(Camera::default()),
+            camera_entity_id: entities.create(Camera {
+                target: entities.create(Spacecraft::default()),
+                ..Default::default()
+            }),
             entities,
             worker,
         };
