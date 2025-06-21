@@ -114,29 +114,29 @@ impl Inner {
                 .expect("failed to bind entities pipeline");
 
             let entities = self.game.entities();
-            let render_data = self.render_data.lock().unwrap();
+            let mut render_data = self.render_data.lock().unwrap();
 
             let camera_matrix = entities
                 .visit(self.game.camera_entity_id(), |entity| {
                     let camera = entity.to_camera();
 
-                    Mat4::perspective_infinite_rh(PI, frame.aspect(), 0.001)
-                        * Mat4::look_at_rh(
-                            Vec3::new(camera.position.x, camera.position.y, camera.distance),
-                            Vec3::new(camera.position.x, camera.position.y, 0.0),
-                            Vec3::new(0.0, 1.0, 0.0),
-                        )
+                    Mat4::look_at_rh(
+                        Vec3::new(camera.position.x, camera.position.y, camera.distance),
+                        Vec3::new(camera.position.x, camera.position.y, 0.0),
+                        Vec3::new(0.0, 1.0, 0.0),
+                    ) * Mat4::perspective_infinite_rh(PI, frame.aspect(), 0.001)
                 })
                 .expect("there is not camera entity");
 
             entities
                 .iter()
-                .filter_map(|(entity_id, entity)| {
-                    render_data
-                        .get(&entity_id)
-                        .map(|render_data| (entity, render_data))
-                })
-                .for_each(|(entity, render_data)| {
+                .filter(|(_, entity)| !matches!(entity, entities::Entity::Camera(_)))
+                .for_each(|(entity_id, entity)| {
+                    let render_data = render_data.entry(entity_id).or_insert_with(|| {
+                        self.create_render_data(entity)
+                            .expect("entity is not renderable")
+                    });
+
                     {
                         let mut entity_buffer = render_data.entity_buffer.write().unwrap();
 
@@ -155,12 +155,11 @@ impl Inner {
                             }
 
                             entities::Entity::Asteroid(asteroid) => {
-                                entity_buffer.matrix = camera_matrix
-                                    * Mat4::from_scale_rotation_translation(
-                                        Vec3::ONE,
-                                        Quat::from_rotation_y(asteroid.rotation),
-                                        Vec3::new(asteroid.position.x, asteroid.position.y, 0.0),
-                                    );
+                                entity_buffer.matrix = Mat4::from_scale_rotation_translation(
+                                    Vec3::ONE,
+                                    Quat::from_rotation_y(asteroid.rotation),
+                                    Vec3::new(asteroid.position.x, asteroid.position.y, 0.0),
+                                ) * camera_matrix;
                             }
 
                             _ => unreachable!(),
@@ -203,9 +202,7 @@ impl Inner {
         }
     }
 
-    fn dispatch_entity_created(&self, entity_id: EntityId) {
-        let entities = self.game.entities();
-
+    fn create_render_data(&self, entity: &entities::Entity) -> Option<RenderData> {
         let entity_buffer: Subbuffer<Entity> =
             self.backend.create_buffer(BufferUsage::UNIFORM_BUFFER);
         let entity_buffer_descriptor_set = {
@@ -226,43 +223,51 @@ impl Inner {
             .expect("failed to create descriptor set for entity")
         };
 
+        let render_data = match entity {
+            entities::Entity::Spacecraft(_) => {
+                {
+                    entity_buffer.write().unwrap().color = Vec3::new(0.1, 0.8, 0.1);
+                }
+
+                Some(RenderData {
+                    entity_buffer,
+                    entity_buffer_descriptor_set,
+                    vertex_buffer: self.spacecraft_vertex_buffer.clone(),
+                    index_buffer: self.spacecraft_index_buffer.clone(),
+                })
+            }
+
+            entities::Entity::Asteroid(asteroid) => {
+                {
+                    entity_buffer.write().unwrap().color = Vec3::new(0.6, 0.6, 0.6);
+                }
+
+                let vertices = once(Vec2::ZERO)
+                    .chain(asteroid.body.into_iter())
+                    .map(|position| Vertex { position })
+                    .collect::<Vec<_>>();
+
+                Some(RenderData {
+                    entity_buffer,
+                    entity_buffer_descriptor_set,
+                    vertex_buffer: self
+                        .backend
+                        .create_buffer_iter(BufferUsage::VERTEX_BUFFER, vertices),
+                    index_buffer: self.asteroid_index_buffer.clone(),
+                })
+            }
+
+            _ => None,
+        };
+
+        render_data
+    }
+
+    fn dispatch_entity_created(&self, entity_id: EntityId) {
+        let entities = self.game.entities();
+
         let data = entities
-            .visit(entity_id, |entity| match entity {
-                entities::Entity::Spacecraft(_) => {
-                    {
-                        entity_buffer.write().unwrap().color = Vec3::new(0.1, 0.8, 0.1);
-                    }
-
-                    Some(RenderData {
-                        entity_buffer,
-                        entity_buffer_descriptor_set,
-                        vertex_buffer: self.spacecraft_vertex_buffer.clone(),
-                        index_buffer: self.spacecraft_index_buffer.clone(),
-                    })
-                }
-
-                entities::Entity::Asteroid(asteroid) => {
-                    {
-                        entity_buffer.write().unwrap().color = Vec3::new(0.6, 0.6, 0.6);
-                    }
-
-                    let vertices = once(Vec2::ZERO)
-                        .chain(asteroid.body.into_iter())
-                        .map(|position| Vertex { position })
-                        .collect::<Vec<_>>();
-
-                    Some(RenderData {
-                        entity_buffer,
-                        entity_buffer_descriptor_set,
-                        vertex_buffer: self
-                            .backend
-                            .create_buffer_iter(BufferUsage::VERTEX_BUFFER, vertices),
-                        index_buffer: self.asteroid_index_buffer.clone(),
-                    })
-                }
-
-                _ => None,
-            })
+            .visit(entity_id, |entity| self.create_render_data(entity))
             .expect("entity not found");
 
         if let Some(data) = data {
