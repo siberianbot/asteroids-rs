@@ -1,7 +1,8 @@
 use std::{
     f32::consts::PI,
     ops::RangeInclusive,
-    sync::{Arc, Mutex},
+    ptr::NonNull,
+    sync::{Arc, Mutex, MutexGuard},
 };
 
 use glam::{Vec2, vec2};
@@ -257,6 +258,38 @@ where
     }
 }
 
+struct Iter<'a> {
+    entities: MutexGuard<'a, Vec<Option<Entity>>>,
+    entity_id: EntityId,
+}
+
+impl<'a> Iterator for Iter<'a> {
+    type Item = (EntityId, &'a Entity);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while self.entity_id < self.entities.len() {
+            let entity_id = self.entity_id;
+
+            let tuple = self
+                .entities
+                .get(entity_id)
+                .and_then(|slot| slot.as_ref())
+                .map(|entity| unsafe {
+                    // HACK this iterator locks entities container thus references are valid
+                    (entity_id, NonNull::from(entity).as_ref())
+                });
+
+            self.entity_id += 1;
+
+            if tuple.is_some() {
+                return tuple;
+            }
+        }
+
+        None
+    }
+}
+
 pub struct Entities {
     event_sender: Sender<Event>,
     entities: Mutex<Vec<Option<Entity>>>,
@@ -339,6 +372,37 @@ impl Entities {
             *slot = None;
 
             self.event_sender.send(Event::EntityDestroyed(entity_id));
+        }
+    }
+
+    pub fn visit<F, R>(&self, entity_id: EntityId, func: F) -> Option<R>
+    where
+        F: FnOnce(&Entity) -> R,
+    {
+        let entities = self.entities.lock().unwrap();
+
+        entities
+            .get(entity_id)
+            .and_then(|slot| slot.as_ref())
+            .map(func)
+    }
+
+    pub fn visit_mut<F, R>(&self, entity_id: EntityId, func: F) -> Option<R>
+    where
+        F: FnOnce(&mut Entity) -> R,
+    {
+        let mut entities = self.entities.lock().unwrap();
+
+        entities
+            .get_mut(entity_id)
+            .and_then(|slot| slot.as_mut())
+            .map(func)
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (EntityId, &Entity)> {
+        Iter {
+            entities: self.entities.lock().unwrap(),
+            entity_id: 0,
         }
     }
 }
