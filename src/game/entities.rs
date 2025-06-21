@@ -14,7 +14,7 @@ use crate::{
 
 pub type EntityId = usize;
 
-pub const SPACECRAFT_VERTICES: &[Vertex] = &[
+pub const SPACECRAFT_VERTICES: [Vertex; 3] = [
     Vertex {
         position: Vec2::new(0.0, 0.5),
     },
@@ -25,11 +25,11 @@ pub const SPACECRAFT_VERTICES: &[Vertex] = &[
         position: Vec2::new(-0.35355339, -0.35355339),
     },
 ];
-pub const SPACECRAFT_INDICES: &[u32] = &[0, 1, 2];
+pub const SPACECRAFT_INDICES: [u32; 3] = [0, 1, 2];
 
 pub const ASTEROID_SEGMENTS: usize = 8;
 pub const ASTEROID_SEGMENT_RANGE: RangeInclusive<f32> = 0.75..=1.0;
-pub const ASTEROID_INDICES: &[u32] = &[
+pub const ASTEROID_INDICES: [u32; 24] = [
     // TODO: try to enumerate in compile-time by using ASTEROID_SEGMENTS value
     0, 1, 2, //
     0, 2, 3, //

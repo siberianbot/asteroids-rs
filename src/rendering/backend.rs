@@ -14,6 +14,7 @@ use vulkano::{
         PrimaryCommandBufferAbstract,
         allocator::{CommandBufferAllocator, StandardCommandBufferAllocator},
     },
+    descriptor_set::allocator::{DescriptorSetAllocator, StandardDescriptorSetAllocator},
     device::{
         Device, DeviceCreateInfo, DeviceExtensions, DeviceFeatures, Queue, QueueCreateInfo,
         QueueFlags,
@@ -30,6 +31,7 @@ use vulkano::{
         graphics::{
             GraphicsPipelineCreateInfo,
             color_blend::ColorBlendState,
+            input_assembly::{InputAssemblyState, PrimitiveTopology},
             subpass::{PipelineRenderingCreateInfo, PipelineSubpassType},
             vertex_input::{Vertex as VertexTrait, VertexDefinition},
             viewport::{Viewport, ViewportState},
@@ -337,6 +339,12 @@ impl Frame<'_> {
         self.extent
     }
 
+    pub fn aspect(&self) -> f32 {
+        let [w, h] = self.extent;
+
+        w / h
+    }
+
     pub fn image_view(&self) -> Arc<ImageView> {
         self.image_view.clone()
     }
@@ -445,9 +453,18 @@ impl Backend {
         Arc::new(allocator)
     }
 
-    pub fn create_buffer<Item>(&self, count: usize, usage: BufferUsage) -> Subbuffer<[Item]>
+    pub fn create_descriptor_set_allocator(&self) -> Arc<dyn DescriptorSetAllocator> {
+        let allocator = StandardDescriptorSetAllocator::new(
+            self.logical_device.handle.clone(),
+            Default::default(),
+        );
+
+        Arc::new(allocator)
+    }
+
+    pub fn create_buffer<T>(&self, usage: BufferUsage) -> Subbuffer<T>
     where
-        Item: BufferContents + Sized,
+        T: BufferContents + Sized,
     {
         let create_info = BufferCreateInfo {
             usage,
@@ -460,11 +477,34 @@ impl Backend {
             ..Default::default()
         };
 
-        let buffer = Buffer::new_slice(
+        let buffer = Buffer::new_sized(self.memory_allocator.clone(), create_info, allocation_info)
+            .expect("failed to create buffer");
+
+        buffer
+    }
+
+    pub fn create_buffer_iter<T, I>(&self, usage: BufferUsage, iter: I) -> Subbuffer<[T]>
+    where
+        T: BufferContents + Sized,
+        I: IntoIterator<Item = T>,
+        I::IntoIter: ExactSizeIterator,
+    {
+        let create_info = BufferCreateInfo {
+            usage,
+            ..Default::default()
+        };
+
+        let allocation_info = AllocationCreateInfo {
+            memory_type_filter: MemoryTypeFilter::HOST_RANDOM_ACCESS
+                | MemoryTypeFilter::PREFER_HOST,
+            ..Default::default()
+        };
+
+        let buffer = Buffer::from_iter(
             self.memory_allocator.clone(),
             create_info,
             allocation_info,
-            count as u64,
+            iter,
         )
         .expect("failed to create buffer");
 
