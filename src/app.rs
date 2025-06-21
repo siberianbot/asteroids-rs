@@ -105,6 +105,8 @@ impl App {
             _ => {}
         });
 
+        let game = Game::new(&command_dispatcher, &event_dispatcher);
+
         let dispatcher_worker = {
             let command_dispatcher = command_dispatcher.clone();
             let event_dispatcher = event_dispatcher.clone();
@@ -116,8 +118,6 @@ impl App {
                 }
             })
         };
-
-        let game = Game::new(&command_dispatcher, &event_dispatcher);
 
         let app = App {
             command_dispatcher,
