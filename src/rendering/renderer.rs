@@ -120,11 +120,17 @@ impl Inner {
                 .visit(self.game.camera_entity_id(), |entity| {
                     let camera = entity.to_camera();
 
-                    Mat4::look_at_rh(
+                    let mut projection =
+                        Mat4::perspective_infinite_lh(PI / 2.0, frame.aspect(), 0.001);
+                    projection.col_mut(1)[1] *= -1.0;
+
+                    let view = Mat4::look_at_lh(
                         Vec3::new(camera.position.x, camera.position.y, camera.distance),
                         Vec3::new(camera.position.x, camera.position.y, 0.0),
                         Vec3::new(0.0, 1.0, 0.0),
-                    ) * Mat4::perspective_infinite_rh(PI, frame.aspect(), 0.001)
+                    );
+
+                    projection * view
                 })
                 .expect("there is not camera entity");
 
@@ -140,30 +146,27 @@ impl Inner {
                     {
                         let mut entity_buffer = render_data.entity_buffer.write().unwrap();
 
-                        match entity {
+                        let model = match entity {
                             entities::Entity::Spacecraft(spacecraft) => {
-                                entity_buffer.matrix = camera_matrix
-                                    * Mat4::from_scale_rotation_translation(
-                                        Vec3::ONE,
-                                        Quat::from_rotation_y(spacecraft.rotation),
-                                        Vec3::new(
-                                            spacecraft.position.x,
-                                            spacecraft.position.y,
-                                            0.0,
-                                        ),
-                                    );
+                                Mat4::from_scale_rotation_translation(
+                                    Vec3::ONE,
+                                    Quat::from_rotation_y(spacecraft.rotation),
+                                    Vec3::new(spacecraft.position.x, spacecraft.position.y, 0.0),
+                                )
                             }
 
                             entities::Entity::Asteroid(asteroid) => {
-                                entity_buffer.matrix = Mat4::from_scale_rotation_translation(
+                                Mat4::from_scale_rotation_translation(
                                     Vec3::ONE,
                                     Quat::from_rotation_y(asteroid.rotation),
                                     Vec3::new(asteroid.position.x, asteroid.position.y, 0.0),
-                                ) * camera_matrix;
+                                )
                             }
 
                             _ => unreachable!(),
-                        }
+                        };
+
+                        entity_buffer.matrix = camera_matrix * model
                     }
 
                     command_buffer_builder
