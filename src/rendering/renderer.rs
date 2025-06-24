@@ -150,7 +150,7 @@ impl Inner {
                             entities::Entity::Spacecraft(spacecraft) => {
                                 Mat4::from_scale_rotation_translation(
                                     Vec3::ONE,
-                                    Quat::from_rotation_y(spacecraft.rotation),
+                                    Quat::from_rotation_z(spacecraft.rotation),
                                     Vec3::new(spacecraft.position.x, spacecraft.position.y, 0.0),
                                 )
                             }
@@ -158,7 +158,7 @@ impl Inner {
                             entities::Entity::Asteroid(asteroid) => {
                                 Mat4::from_scale_rotation_translation(
                                     Vec3::ONE,
-                                    Quat::from_rotation_y(asteroid.rotation),
+                                    Quat::from_rotation_z(asteroid.rotation),
                                     Vec3::new(asteroid.position.x, asteroid.position.y, 0.0),
                                 )
                             }
