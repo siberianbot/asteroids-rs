@@ -71,6 +71,9 @@ impl Default for Camera {
 pub struct Spacecraft {
     pub position: Vec2,
     pub rotation: f32,
+    pub movement: PlayerMovement,
+    pub velocity: Vec2,
+    pub acceleration: Vec2,
 }
 
 impl Default for Spacecraft {
@@ -78,6 +81,9 @@ impl Default for Spacecraft {
         Self {
             position: Default::default(),
             rotation: Default::default(),
+            movement: PlayerMovement::empty(),
+            velocity: Vec2::ZERO,
+            acceleration: Vec2::ZERO,
         }
     }
 }
@@ -86,6 +92,7 @@ pub struct Asteroid {
     pub position: Vec2,
     pub rotation: f32,
     pub body: [Vec2; ASTEROID_SEGMENTS],
+    pub velocity: Vec2,
 }
 
 impl Default for Asteroid {
@@ -121,10 +128,12 @@ impl Default for Asteroid {
         let center = (max - min) / 2.0;
         body.iter_mut().for_each(|segment| *segment -= center);
 
+        // TODO generate rotation and velocity
         Self {
             position: Default::default(),
             rotation: Default::default(),
             body,
+            velocity: Vec2::ZERO,
         }
     }
 }

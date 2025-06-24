@@ -95,6 +95,7 @@ struct App {
     _dispatcher_worker: Worker,
 
     game: Arc<Game>,
+    _game_worker: Worker,
 
     inner: Option<Inner>,
 }
@@ -112,7 +113,7 @@ impl App {
             _ => {}
         });
 
-        let game = Game::new(&command_dispatcher, &event_dispatcher);
+        let (game, game_worker) = Game::new(&command_dispatcher, &event_dispatcher);
 
         let dispatcher_worker = {
             let command_dispatcher = command_dispatcher.clone();
@@ -132,6 +133,7 @@ impl App {
             _dispatcher_worker: dispatcher_worker,
 
             game,
+            _game_worker: game_worker,
 
             inner: Default::default(),
         };
