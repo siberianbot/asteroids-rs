@@ -5,6 +5,7 @@ use std::{
     sync::{Arc, Mutex, MutexGuard},
 };
 
+use bitflags::bitflags;
 use glam::{Vec2, vec2};
 
 use crate::{
@@ -40,6 +41,16 @@ pub const ASTEROID_INDICES: [u32; 24] = [
     0, 7, 8, //
     0, 8, 1, //
 ];
+
+bitflags! {
+    #[derive(Clone, Copy, Debug, PartialEq)]
+    pub struct PlayerMovement : u32{
+        const ACCELERATE = 1 << 0;
+        const DECELERATE = 1 << 1;
+        const INCLINE_LEFT = 1 << 2;
+        const INCLINE_RIGHT = 1 << 3;
+    }
+}
 
 pub struct Camera {
     pub position: Vec2,

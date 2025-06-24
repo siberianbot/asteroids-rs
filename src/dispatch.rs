@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex, mpsc};
 
-use crate::game::entities::EntityId;
+use crate::game::entities::{EntityId, PlayerMovement};
 
 pub struct Sender<T> {
     tx: mpsc::Sender<T>,
@@ -79,6 +79,8 @@ impl<T> Dispatcher<T> {
 #[non_exhaustive]
 pub enum Command {
     Exit,
+    PlayerMovementDown(PlayerMovement),
+    PlayerMovementUp(PlayerMovement),
 }
 
 #[derive(Debug, PartialEq)]

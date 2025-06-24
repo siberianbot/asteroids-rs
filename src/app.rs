@@ -11,6 +11,7 @@ use winit::{
 use crate::{
     dispatch::{Command, Dispatcher, Event, Sender},
     game::Game,
+    input::InputController,
     rendering::{backend::Backend, renderer::Renderer},
     worker::Worker,
 };
@@ -23,6 +24,7 @@ enum AppEvent {
 struct Inner {
     command_sender: Sender<Command>,
     event_sender: Sender<Event>,
+    input_controller: InputController,
     window: Arc<Window>,
     backend: Arc<Backend>,
     _renderer: Renderer,
@@ -43,6 +45,7 @@ impl Inner {
         let inner = Inner {
             command_sender: command_dispatcher.create_sender(),
             event_sender: event_dispatcher.create_sender(),
+            input_controller: InputController::new(command_dispatcher),
             window,
             backend,
             _renderer: renderer,
@@ -75,6 +78,10 @@ impl Inner {
 
             WindowEvent::CloseRequested => {
                 self.command_sender.send(Command::Exit);
+            }
+
+            WindowEvent::KeyboardInput { event, .. } => {
+                self.input_controller.dispatch(event);
             }
 
             _ => {}
