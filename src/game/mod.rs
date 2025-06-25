@@ -1,7 +1,8 @@
 use std::{
     f32::consts::PI,
     sync::{Arc, atomic::Ordering},
-    time::Instant,
+    thread,
+    time::{Duration, Instant},
 };
 
 use entities::{Entities, Entity, UpdateContext};
@@ -53,13 +54,20 @@ impl Game {
             let game = game.clone();
 
             Worker::spawn("Game", move |alive| {
+                const RATE: f32 = 1.0 / 120.0;
+
                 let mut last_update = Instant::now();
 
                 while alive.load(Ordering::Relaxed) {
                     let delta = Instant::now().duration_since(last_update).as_secs_f32();
+
                     game.entities.update(delta);
 
                     last_update = Instant::now();
+
+                    if delta < RATE {
+                        thread::sleep(Duration::from_secs_f32(RATE - delta));
+                    }
                 }
             })
         };
@@ -123,6 +131,9 @@ impl Game {
     }
 
     fn entities_movement(context: UpdateContext) {
+        const BREAKING_MULTIPLIER: f32 = 0.5;
+        const BREAKING_EPSILON: f32 = 0.01;
+
         match context.current_entity() {
             Entity::Asteroid(asteroid) => {
                 let position = asteroid.position + context.delta() * asteroid.velocity;
@@ -131,7 +142,13 @@ impl Game {
             }
 
             Entity::Spacecraft(spacecraft) => {
-                let velocity = spacecraft.velocity + context.delta() * spacecraft.acceleration;
+                let acceleration = if spacecraft.acceleration.length() < BREAKING_EPSILON {
+                    -1.0 * spacecraft.velocity * BREAKING_MULTIPLIER
+                } else {
+                    spacecraft.acceleration
+                };
+
+                let velocity = spacecraft.velocity + context.delta() * acceleration;
                 let position = spacecraft.position + context.delta() * spacecraft.velocity;
 
                 context.modify(|entity| {
@@ -147,7 +164,10 @@ impl Game {
     }
 
     fn spacecraft_movement_handle(context: UpdateContext) {
-        const ROTATION_VELOCITY: f32 = 8.0 * PI;
+        const VEC: Vec2 = Vec2::new(1.0, 0.0);
+        const ACCELERATION: f32 = 2.0;
+        const DECELERATION: f32 = -1.0;
+        const ROTATION_VELOCITY: f32 = PI;
 
         struct Changes {
             acceleration: Vec2,
@@ -156,27 +176,29 @@ impl Game {
 
         let changes = context.current_entity().as_spacecraft().map(|spacecraft| {
             let mut changes = Changes {
-                acceleration: spacecraft.acceleration,
+                acceleration: Vec2::ZERO,
                 rotation: spacecraft.rotation,
             };
 
-            // TODO: acceleration
+            let acceleration_vec = VEC.rotate(spacecraft.rotation.sin_cos().into());
+
+            if spacecraft.movement.contains(PlayerMovement::ACCELERATE) {
+                changes.acceleration += ACCELERATION * acceleration_vec;
+            }
+
+            if spacecraft.movement.contains(PlayerMovement::DECELERATE) {
+                changes.acceleration += DECELERATION * acceleration_vec;
+            }
 
             if spacecraft.movement.contains(PlayerMovement::INCLINE_LEFT) {
-                changes.rotation -= context.delta() * ROTATION_VELOCITY;
-
-                // if changes.rotation > 2.0 * PI {
-                //     changes.rotation -= 2.0 * PI;
-                // }
+                changes.rotation += context.delta() * ROTATION_VELOCITY;
             }
 
             if spacecraft.movement.contains(PlayerMovement::INCLINE_RIGHT) {
-                changes.rotation += context.delta() * ROTATION_VELOCITY;
-
-                // if changes.rotation < 0.0 {
-                //     changes.rotation += 2.0 * PI;
-                // }
+                changes.rotation -= context.delta() * ROTATION_VELOCITY;
             }
+
+            // TODO: map rotation to [0; 2pi]
 
             changes
         });
