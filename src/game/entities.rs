@@ -42,6 +42,9 @@ pub const ASTEROID_INDICES: [u32; 24] = [
     0, 8, 1, //
 ];
 
+pub const ASTEROID_VELOCITY_RANGE: RangeInclusive<f32> = 0.25..=1.5;
+pub const ASTEROID_ROTATION_VELOCITY_RANGE: RangeInclusive<f32> = 0.25..=2.0;
+
 bitflags! {
     #[derive(Clone, Copy, Debug, PartialEq)]
     pub struct PlayerMovement : u32{
@@ -100,6 +103,7 @@ impl Default for Spacecraft {
 pub struct Asteroid {
     pub position: Vec2,
     pub rotation: f32,
+    pub rotation_velocity: f32,
     pub body: [Vec2; ASTEROID_SEGMENTS],
     pub velocity: Vec2,
 }
@@ -137,12 +141,18 @@ impl Default for Asteroid {
         let center = (max - min) / 2.0;
         body.iter_mut().for_each(|segment| *segment -= center);
 
-        // TODO generate rotation and velocity
+        let rotation = rand::random_range(0.0..=2.0 * PI);
+        let rotation_velocity = rand::random_range(ASTEROID_ROTATION_VELOCITY_RANGE);
+
+        let velocity = rand::random_range(ASTEROID_VELOCITY_RANGE);
+        let velocity = velocity * Vec2::ONE.rotate(rotation.sin_cos().into());
+
         Self {
             position: Default::default(),
-            rotation: Default::default(),
+            rotation,
+            rotation_velocity,
             body,
-            velocity: Vec2::ZERO,
+            velocity,
         }
     }
 }
@@ -236,13 +246,15 @@ impl From<Asteroid> for Entity {
     }
 }
 
-pub struct UpdateContext<'a> {
+pub struct UpdateContext<'a, T> {
     delta: f32,
     entities: &'a mut Vec<Option<Entity>>,
+    event_sender: Sender<Event>,
     current_entity_id: EntityId,
+    data: &'a T,
 }
 
-impl UpdateContext<'_> {
+impl<T> UpdateContext<'_, T> {
     pub fn delta(&self) -> f32 {
         self.delta
     }
@@ -270,15 +282,28 @@ impl UpdateContext<'_> {
 
         func(entity);
     }
+
+    pub fn destroy(self) {
+        if let Some(slot) = self.entities.get_mut(self.current_entity_id) {
+            *slot = None;
+
+            self.event_sender
+                .send(Event::EntityDestroyed(self.current_entity_id));
+        }
+    }
+
+    pub fn data(&self) -> &T {
+        self.data
+    }
 }
 
-pub struct UpdateFunc(Box<dyn Fn(UpdateContext)>);
+pub struct UpdateFunc<T>(Box<dyn Fn(UpdateContext<T>)>);
 
-unsafe impl Send for UpdateFunc {}
+unsafe impl<T> Send for UpdateFunc<T> {}
 
-impl<F> From<F> for UpdateFunc
+impl<T, F> From<F> for UpdateFunc<T>
 where
-    F: Fn(UpdateContext) + 'static,
+    F: Fn(UpdateContext<T>) + 'static,
 {
     fn from(func: F) -> Self {
         let func = Box::new(func);
@@ -319,16 +344,16 @@ impl<'a> Iterator for Iter<'a> {
     }
 }
 
-pub struct Entities {
+pub struct Entities<T> {
     event_sender: Sender<Event>,
     entities: Mutex<Vec<Option<Entity>>>,
-    update_funcs: Mutex<Vec<UpdateFunc>>,
+    update_funcs: Mutex<Vec<UpdateFunc<T>>>,
 }
 
-impl Entities {
-    pub fn new<F, I>(event_dispatcher: &Dispatcher<Event>, update_funcs: I) -> Arc<Entities>
+impl<T> Entities<T> {
+    pub fn new<F, I>(event_dispatcher: &Dispatcher<Event>, update_funcs: I) -> Arc<Entities<T>>
     where
-        F: Into<UpdateFunc>,
+        F: Into<UpdateFunc<T>>,
         I: IntoIterator<Item = F>,
     {
         let event_sender = event_dispatcher.create_sender();
@@ -368,7 +393,7 @@ impl Entities {
         index
     }
 
-    pub fn update(&self, delta: f32) {
+    pub fn update(&self, delta: f32, data: &T) {
         let mut entities = self.entities.lock().unwrap();
         let update_funcs = self.update_funcs.lock().unwrap();
 
@@ -386,7 +411,9 @@ impl Entities {
                 let context = UpdateContext {
                     delta,
                     entities: &mut entities,
+                    event_sender: self.event_sender.clone(),
                     current_entity_id: entity_id,
+                    data,
                 };
 
                 func(context);
@@ -449,7 +476,7 @@ mod tests {
         let dispatcher = Dispatcher::new();
         let entities = Entities::new(
             &dispatcher,
-            [|context: UpdateContext| {
+            [|context: UpdateContext<()>| {
                 assert_eq!(context.delta(), DELTA);
 
                 match context.current_entity() {
@@ -468,7 +495,7 @@ mod tests {
         });
         dispatcher.dispatch();
 
-        entities.update(DELTA);
+        entities.update(DELTA, &());
 
         entities.destroy(entity_id);
         dispatcher.dispatch();

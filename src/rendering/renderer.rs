@@ -117,7 +117,7 @@ impl Inner {
             let mut render_data = self.render_data.lock().unwrap();
 
             let camera_matrix = entities
-                .visit(self.game.camera_entity_id(), |entity| {
+                .visit(self.game.player_state().camera_id, |entity| {
                     let camera = entity.to_camera();
 
                     let mut projection =

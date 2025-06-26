@@ -2,6 +2,7 @@ use std::sync::{Arc, Mutex, mpsc};
 
 use crate::game::entities::{EntityId, PlayerMovement};
 
+#[derive(Clone)]
 pub struct Sender<T> {
     tx: mpsc::Sender<T>,
 }
@@ -86,7 +87,7 @@ pub enum Command {
     CameraZoomIn,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub enum Event {
     WindowResized([u32; 2]),

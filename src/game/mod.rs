@@ -1,7 +1,7 @@
 use std::{
     f32::consts::PI,
-    ops::{Div, Mul},
-    sync::{Arc, atomic::Ordering},
+    ops::{Div, Mul, RangeInclusive},
+    sync::{Arc, Mutex, atomic::Ordering},
     thread,
     time::{Duration, Instant},
 };
@@ -12,18 +12,27 @@ use glam::Vec2;
 use crate::{
     dispatch::{Command, Dispatcher, Event},
     game::entities::{
-        CAMERA_DISTANCE_MULTIPLIER, CAMERA_MAX_DISTANCE, CAMERA_MIN_DISTANCE, Camera, EntityId,
-        PlayerMovement, Spacecraft,
+        Asteroid, CAMERA_DISTANCE_MULTIPLIER, CAMERA_MAX_DISTANCE, CAMERA_MIN_DISTANCE, Camera,
+        EntityId, PlayerMovement, Spacecraft,
     },
     worker::Worker,
 };
 
 pub mod entities;
 
+pub struct PlayerState {
+    pub spacecraft_id: EntityId,
+    pub camera_id: EntityId,
+}
+
+struct AsteroidRespawnState {
+    timer: f32,
+}
+
 pub struct Game {
-    entities: Arc<Entities>,
-    player_entity_id: EntityId,
-    camera_entity_id: EntityId,
+    entities: Arc<Entities<PlayerState>>,
+    player_state: PlayerState,
+    asteroid_respawn_state: Mutex<AsteroidRespawnState>,
 }
 
 impl Game {
@@ -38,19 +47,23 @@ impl Game {
                 Self::camera_zoom,
                 Self::entities_movement,
                 Self::spacecraft_movement_handle,
+                Self::asteroids_despawn,
             ],
         );
 
-        let player_entity_id = entities.create(Spacecraft::default());
+        let spacecraft_entity_id = entities.create(Spacecraft::default());
         let camera_entity_id = entities.create(Camera {
-            target: player_entity_id,
+            target: spacecraft_entity_id,
             ..Default::default()
         });
 
         let game = Game {
             entities,
-            player_entity_id,
-            camera_entity_id,
+            player_state: PlayerState {
+                spacecraft_id: spacecraft_entity_id,
+                camera_id: camera_entity_id,
+            },
+            asteroid_respawn_state: Mutex::new(AsteroidRespawnState { timer: 0.0 }),
         };
 
         let game = Arc::new(game);
@@ -66,7 +79,7 @@ impl Game {
                 while alive.load(Ordering::Relaxed) {
                     let delta = Instant::now().duration_since(last_update).as_secs_f32();
 
-                    game.entities.update(delta);
+                    game.update(delta);
 
                     last_update = Instant::now();
 
@@ -88,33 +101,83 @@ impl Game {
         (game.clone(), worker)
     }
 
-    pub fn entities(&self) -> Arc<Entities> {
+    pub fn entities(&self) -> Arc<Entities<PlayerState>> {
         self.entities.clone()
     }
 
-    pub fn camera_entity_id(&self) -> EntityId {
-        self.camera_entity_id
+    pub fn player_state(&self) -> &PlayerState {
+        &self.player_state
+    }
+
+    fn update(&self, delta: f32) {
+        self.entities.update(delta, &self.player_state);
+
+        self.respawn_asteroids(delta);
+    }
+
+    fn respawn_asteroids(&self, delta: f32) {
+        const SAFE_DISTANCE: RangeInclusive<f32> = 10.0..=20.0;
+
+        let mut state = self.asteroid_respawn_state.lock().unwrap();
+
+        state.timer -= delta;
+
+        if state.timer > 0.0 {
+            return;
+        }
+
+        let count = self
+            .entities
+            .iter()
+            .filter_map(|(_, entity)| entity.as_asteroid())
+            .count();
+
+        if count >= 16 {
+            return;
+        }
+
+        let distance = rand::random_range(SAFE_DISTANCE);
+        let rotation = rand::random_range(0.0..=2.0 * PI);
+
+        let position = self
+            .entities
+            .visit(self.player_state.spacecraft_id, |entity| {
+                entity.as_spacecraft().map(|spacecraft| {
+                    spacecraft.position + distance * Vec2::ONE.rotate(rotation.sin_cos().into())
+                })
+            })
+            .flatten()
+            .expect("there is no player entity");
+
+        let asteroid = Asteroid {
+            position,
+            ..Asteroid::default()
+        };
+
+        self.entities.create(asteroid);
+
+        state.timer = 1.0;
     }
 
     fn handle_command(&self, command: &Command) {
         match command {
             Command::PlayerMovementDown(movement) => self
                 .entities
-                .visit_mut(self.player_entity_id, |entity| {
+                .visit_mut(self.player_state.spacecraft_id, |entity| {
                     entity.to_spacecraft_mut().movement |= *movement;
                 })
                 .expect("there is not player entity"),
 
             Command::PlayerMovementUp(movement) => self
                 .entities
-                .visit_mut(self.player_entity_id, |entity| {
+                .visit_mut(self.player_state.spacecraft_id, |entity| {
                     entity.to_spacecraft_mut().movement &= !*movement;
                 })
                 .expect("there is not player entity"),
 
             Command::ToggleCameraFollow => self
                 .entities
-                .visit_mut(self.camera_entity_id, |entity| {
+                .visit_mut(self.player_state.camera_id, |entity| {
                     let camera = entity.to_camera_mut();
 
                     camera.follow = !camera.follow;
@@ -123,7 +186,7 @@ impl Game {
 
             Command::CameraZoomIn => self
                 .entities
-                .visit_mut(self.camera_entity_id, |entity| {
+                .visit_mut(self.player_state.camera_id, |entity| {
                     let camera = entity.to_camera_mut();
 
                     camera.target_distance = camera
@@ -135,7 +198,7 @@ impl Game {
 
             Command::CameraZoomOut => self
                 .entities
-                .visit_mut(self.camera_entity_id, |entity| {
+                .visit_mut(self.player_state.camera_id, |entity| {
                     let camera = entity.to_camera_mut();
 
                     camera.target_distance = camera
@@ -149,7 +212,7 @@ impl Game {
         }
     }
 
-    fn camera_sync(context: UpdateContext) {
+    fn camera_sync(context: UpdateContext<PlayerState>) {
         let position = context
             .current_entity()
             .as_camera()
@@ -172,7 +235,7 @@ impl Game {
         }
     }
 
-    fn camera_zoom(context: UpdateContext) {
+    fn camera_zoom(context: UpdateContext<PlayerState>) {
         const ZOOM_EPSILON: f32 = 0.1;
         const ZOOM_SPEED: f32 = 2.0;
 
@@ -193,15 +256,21 @@ impl Game {
         }
     }
 
-    fn entities_movement(context: UpdateContext) {
+    fn entities_movement(context: UpdateContext<PlayerState>) {
         const BREAKING_MULTIPLIER: f32 = 0.5;
         const BREAKING_EPSILON: f32 = 0.01;
 
         match context.current_entity() {
             Entity::Asteroid(asteroid) => {
                 let position = asteroid.position + context.delta() * asteroid.velocity;
+                let rotation = asteroid.rotation + context.delta() * asteroid.rotation_velocity;
 
-                context.modify(|entity| entity.to_asteroid_mut().position = position);
+                context.modify(|entity| {
+                    let asteroid = entity.to_asteroid_mut();
+
+                    asteroid.position = position;
+                    asteroid.rotation = rotation;
+                });
             }
 
             Entity::Spacecraft(spacecraft) => {
@@ -226,7 +295,7 @@ impl Game {
         }
     }
 
-    fn spacecraft_movement_handle(context: UpdateContext) {
+    fn spacecraft_movement_handle(context: UpdateContext<PlayerState>) {
         const VEC: Vec2 = Vec2::new(1.0, 0.0);
         const ACCELERATION: f32 = 2.0;
         const DECELERATION: f32 = -1.0;
@@ -273,6 +342,27 @@ impl Game {
                 spacecraft.acceleration = changes.acceleration;
                 spacecraft.rotation = changes.rotation;
             });
+        }
+    }
+
+    fn asteroids_despawn(context: UpdateContext<PlayerState>) {
+        let player_position = context
+            .get_entity(context.data().spacecraft_id)
+            .and_then(|entity| entity.as_spacecraft())
+            .map(|spacecraft| spacecraft.position)
+            .expect("there is no player entity");
+
+        let asteroid_position = context
+            .current_entity()
+            .as_asteroid()
+            .map(|asteroid| asteroid.position);
+
+        if let Some(asteroid_position) = asteroid_position {
+            let distance = player_position.distance(asteroid_position);
+
+            if distance >= 25.0 {
+                context.destroy();
+            }
         }
     }
 }
