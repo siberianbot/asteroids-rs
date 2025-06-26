@@ -271,7 +271,7 @@ impl Inner {
 
         let data = entities
             .visit(entity_id, |entity| self.create_render_data(entity))
-            .expect("entity not found");
+            .flatten();
 
         if let Some(data) = data {
             self.render_data.lock().unwrap().insert(entity_id, data);
