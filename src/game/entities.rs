@@ -52,6 +52,11 @@ bitflags! {
     }
 }
 
+pub const CAMERA_INITIAL_DISTANCE: f32 = 4.0;
+pub const CAMERA_MIN_DISTANCE: f32 = 1.0;
+pub const CAMERA_MAX_DISTANCE: f32 = 32.0;
+pub const CAMERA_DISTANCE_MULTIPLIER: f32 = 2.0;
+
 pub struct Camera {
     pub position: Vec2,
     pub distance: f32,
@@ -64,8 +69,8 @@ impl Default for Camera {
     fn default() -> Self {
         Self {
             position: Default::default(),
-            distance: 1.0,
-            target_distance: 1.0,
+            distance: CAMERA_INITIAL_DISTANCE,
+            target_distance: CAMERA_INITIAL_DISTANCE,
             target: Default::default(),
             follow: true,
         }

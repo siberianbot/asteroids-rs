@@ -11,7 +11,10 @@ use glam::Vec2;
 
 use crate::{
     dispatch::{Command, Dispatcher, Event},
-    game::entities::{Camera, EntityId, PlayerMovement, Spacecraft},
+    game::entities::{
+        CAMERA_DISTANCE_MULTIPLIER, CAMERA_MAX_DISTANCE, CAMERA_MIN_DISTANCE, Camera, EntityId,
+        PlayerMovement, Spacecraft,
+    },
     worker::Worker,
 };
 
@@ -123,7 +126,10 @@ impl Game {
                 .visit_mut(self.camera_entity_id, |entity| {
                     let camera = entity.to_camera_mut();
 
-                    camera.target_distance = camera.target_distance.div(2.0).clamp(1.0, 16.0);
+                    camera.target_distance = camera
+                        .target_distance
+                        .div(CAMERA_DISTANCE_MULTIPLIER)
+                        .clamp(CAMERA_MIN_DISTANCE, CAMERA_MAX_DISTANCE);
                 })
                 .expect("there is not camera entity"),
 
@@ -132,7 +138,10 @@ impl Game {
                 .visit_mut(self.camera_entity_id, |entity| {
                     let camera = entity.to_camera_mut();
 
-                    camera.target_distance = camera.target_distance.mul(2.0).clamp(1.0, 16.0);
+                    camera.target_distance = camera
+                        .target_distance
+                        .mul(CAMERA_DISTANCE_MULTIPLIER)
+                        .clamp(CAMERA_MIN_DISTANCE, CAMERA_MAX_DISTANCE);
                 })
                 .expect("there is not camera entity"),
 
@@ -165,6 +174,7 @@ impl Game {
 
     fn camera_zoom(context: UpdateContext) {
         const ZOOM_EPSILON: f32 = 0.1;
+        const ZOOM_SPEED: f32 = 2.0;
 
         let distance = context.current_entity().as_camera().map(|camera| {
             let diff = camera.target_distance - camera.distance;
@@ -173,7 +183,7 @@ impl Game {
                 return camera.target_distance;
             }
 
-            camera.distance + context.delta() * diff
+            camera.distance + context.delta() * ZOOM_SPEED * diff
         });
 
         if let Some(distance) = distance {
