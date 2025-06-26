@@ -190,8 +190,6 @@ struct SwapchainInner {
 
 struct Swapchain {
     window: Arc<Window>,
-    min_extent: [u32; 2],
-    max_extent: [u32; 2],
     format: Format,
     outdated: Arc<AtomicBool>,
     inner: Mutex<SwapchainInner>,
@@ -264,8 +262,6 @@ impl Swapchain {
 
         let swapchain = Swapchain {
             window,
-            min_extent: surface_capabilities.min_image_extent,
-            max_extent: surface_capabilities.max_image_extent,
             format: surface_format,
             outdated: Arc::new(AtomicBool::new(false)),
             inner: Mutex::new(inner),
@@ -277,16 +273,10 @@ impl Swapchain {
     fn recreate(&self) {
         let [width, height]: [u32; 2] = self.window.inner_size().into();
 
-        let [min_width, min_height] = self.min_extent;
-        let [max_width, max_height] = self.max_extent;
-
         let mut inner = self.inner.lock().unwrap();
 
         let create_info = SwapchainCreateInfo {
-            image_extent: [
-                width.clamp(min_width, max_width),
-                height.clamp(min_height, max_height),
-            ],
+            image_extent: [width.max(1), height.max(1)],
             ..inner.handle.create_info()
         };
 

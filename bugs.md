@@ -11,4 +11,6 @@ Legend:
     - Renderer is only one who recreates swapchain
     - R&D: why mutex with swapchain is locked?
 
-- [ ] Resize of window does not changes size of viewport
+- [+] Resize of window does not changes size of viewport
+    - Surface capabilities were not updated after window resize
+    - Removed clamp between min/max extent from capabilities
