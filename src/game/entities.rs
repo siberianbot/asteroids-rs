@@ -55,7 +55,9 @@ bitflags! {
 pub struct Camera {
     pub position: Vec2,
     pub distance: f32,
+    pub target_distance: f32,
     pub target: EntityId,
+    pub follow: bool,
 }
 
 impl Default for Camera {
@@ -63,7 +65,9 @@ impl Default for Camera {
         Self {
             position: Default::default(),
             distance: 1.0,
+            target_distance: 1.0,
             target: Default::default(),
+            follow: true,
         }
     }
 }

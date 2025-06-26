@@ -1,5 +1,6 @@
 use std::{
     f32::consts::PI,
+    ops::{Div, Mul},
     sync::{Arc, atomic::Ordering},
     thread,
     time::{Duration, Instant},
@@ -31,6 +32,7 @@ impl Game {
             event_dispatcher,
             [
                 Self::camera_sync,
+                Self::camera_zoom,
                 Self::entities_movement,
                 Self::spacecraft_movement_handle,
             ],
@@ -96,36 +98,87 @@ impl Game {
             Command::PlayerMovementDown(movement) => self
                 .entities
                 .visit_mut(self.player_entity_id, |entity| {
-                    entity.to_spacecraft_mut().movement |= *movement
+                    entity.to_spacecraft_mut().movement |= *movement;
                 })
                 .expect("there is not player entity"),
 
             Command::PlayerMovementUp(movement) => self
                 .entities
                 .visit_mut(self.player_entity_id, |entity| {
-                    entity.to_spacecraft_mut().movement &= !*movement
+                    entity.to_spacecraft_mut().movement &= !*movement;
                 })
                 .expect("there is not player entity"),
+
+            Command::ToggleCameraFollow => self
+                .entities
+                .visit_mut(self.camera_entity_id, |entity| {
+                    let camera = entity.to_camera_mut();
+
+                    camera.follow = !camera.follow;
+                })
+                .expect("there is not camera entity"),
+
+            Command::CameraZoomIn => self
+                .entities
+                .visit_mut(self.camera_entity_id, |entity| {
+                    let camera = entity.to_camera_mut();
+
+                    camera.target_distance = camera.target_distance.div(2.0).clamp(1.0, 16.0);
+                })
+                .expect("there is not camera entity"),
+
+            Command::CameraZoomOut => self
+                .entities
+                .visit_mut(self.camera_entity_id, |entity| {
+                    let camera = entity.to_camera_mut();
+
+                    camera.target_distance = camera.target_distance.mul(2.0).clamp(1.0, 16.0);
+                })
+                .expect("there is not camera entity"),
 
             _ => {}
         }
     }
 
     fn camera_sync(context: UpdateContext) {
-        let position = context.current_entity().as_camera().and_then(|camera| {
-            context
-                .get_entity(camera.target)
-                .and_then(|target| match target {
-                    Entity::Spacecraft(spacecraft) => Some(spacecraft.position),
-                    Entity::Asteroid(asteroid) => Some(asteroid.position),
+        let position = context
+            .current_entity()
+            .as_camera()
+            .filter(|camera| camera.follow)
+            .and_then(|camera| {
+                context
+                    .get_entity(camera.target)
+                    .and_then(|target| match target {
+                        Entity::Spacecraft(spacecraft) => Some(spacecraft.position),
+                        Entity::Asteroid(asteroid) => Some(asteroid.position),
 
-                    _ => None,
-                })
-        });
+                        _ => None,
+                    })
+            });
 
         if let Some(position) = position {
             context.modify(|entity| {
                 entity.to_camera_mut().position = position;
+            });
+        }
+    }
+
+    fn camera_zoom(context: UpdateContext) {
+        const ZOOM_EPSILON: f32 = 0.1;
+
+        let distance = context.current_entity().as_camera().map(|camera| {
+            let diff = camera.target_distance - camera.distance;
+
+            if diff.abs() < ZOOM_EPSILON {
+                return camera.target_distance;
+            }
+
+            camera.distance + context.delta() * diff
+        });
+
+        if let Some(distance) = distance {
+            context.modify(|entity| {
+                entity.to_camera_mut().distance = distance;
             });
         }
     }

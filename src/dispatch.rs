@@ -81,6 +81,9 @@ pub enum Command {
     Exit,
     PlayerMovementDown(PlayerMovement),
     PlayerMovementUp(PlayerMovement),
+    ToggleCameraFollow,
+    CameraZoomOut,
+    CameraZoomIn,
 }
 
 #[derive(Debug, PartialEq)]
