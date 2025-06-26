@@ -3,6 +3,7 @@ Legend:
 * [+] done
 * [~] in progress
 * [?] not sure
+* [x] cancelled
 
 - Asteroids game made in Rust
 
@@ -17,17 +18,17 @@ Legend:
                 - [ACCEPTED] vulkano?
                 - [DISCARDED - too low level and unsafe] ash-rs? 
             - [+] VK backend initialization
-            - [~] VK renderer initialization
+            - [+] VK renderer initialization
 
         - [~] Shaders
-            - [~] Entities rendering
+            - [+] Entities rendering
             - UI rendering
 
         - [~] Entities rendering
 
         - Utils for various purposes
             - Texture atlas
-            - Dynamic buffer allocation
+            - [x] Dynamic buffer allocation
             
         - UI rendering
 
@@ -42,12 +43,15 @@ Legend:
     - Game logic
 
         - [~] Game commands
-            - Player input
-                - Forward acceleration
-                - Backward acceleration
-                - Incline (left/right)
+            - [~] Player input
+                - [+] Forward acceleration
+                - [+] Backward acceleration
+                - [+] Incline (left/right)
                 - Fire
-            - [~] Exit
+            - [+] Exit
+            - [+] Camera control
+                - [+] Follow
+                - [+] Zoom in/out
             - ...
 
         - [~] Game events
@@ -56,10 +60,10 @@ Legend:
             - [~] Collision detected
             - ...
 
-        - [~] Entities
-            - [~] Spacecraft entity
-            - [~] Asteroid entity
-            - [~] Camera entity
+        - [+] Entities
+            - [+] Spacecraft entity
+            - [+] Asteroid entity
+            - [+] Camera entity
 
         - [~] Messaging
             - [+] Commands dispatching
@@ -70,8 +74,8 @@ Legend:
         - [~] Game loop
             - [~] Entities updated
                 - [+] Camera sync with target entity
-                - Spacecraft acceleration/deceleration
-                - Entities movement
+                - [+] Spacecraft acceleration/deceleration
+                - [~] Entities movement
                 - ...
 
     - Utils

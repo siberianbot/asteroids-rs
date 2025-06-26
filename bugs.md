@@ -10,3 +10,5 @@ Legend:
     - Event::WindowResized is handled without explicit swapchain recreation
     - Renderer is only one who recreates swapchain
     - R&D: why mutex with swapchain is locked?
+
+- [ ] Resize of window does not changes size of viewport
