@@ -112,8 +112,6 @@ impl Default for Asteroid {
     fn default() -> Self {
         let mut body: [Vec2; ASTEROID_SEGMENTS] = Default::default();
 
-        let mut min = Vec2::ZERO;
-        let mut max = Vec2::ZERO;
         let angle_step = 2.0 * PI / ASTEROID_SEGMENTS as f32;
 
         for segment in 0..ASTEROID_SEGMENTS {
@@ -124,21 +122,10 @@ impl Default for Asteroid {
             let y = radius * angle.cos();
 
             body[segment] = vec2(x, y);
-
-            match x {
-                x if x < min.x => min.x = x,
-                x if x > max.x => max.x = x,
-                _ => {}
-            }
-
-            match y {
-                y if y < min.y => min.y = y,
-                y if y > max.y => max.y = y,
-                _ => {}
-            }
         }
 
-        let center = (max - min) / 2.0;
+        let center: Vec2 = body.iter().sum();
+
         body.iter_mut().for_each(|segment| *segment -= center);
 
         let rotation = rand::random_range(0.0..=2.0 * PI);
