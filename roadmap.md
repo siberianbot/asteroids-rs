@@ -28,7 +28,7 @@ Legend:
 
         - Utils for various purposes
             - Texture atlas
-            - [x] Dynamic buffer allocation
+            - [DISCARDED - no purpose] Dynamic buffer allocation
             
         - UI rendering
 
@@ -55,8 +55,8 @@ Legend:
             - ...
 
         - [~] Game events
-            - [~] Entity created
-            - [~] Entity destroyed
+            - [+] Entity created
+            - [+] Entity destroyed
             - [~] Collision detected
             - ...
 
@@ -75,8 +75,11 @@ Legend:
             - [~] Entities updated
                 - [+] Camera sync with target entity
                 - [+] Spacecraft acceleration/deceleration
-                - [~] Entities movement
+                - [+] Entities movement
+                - [+] Asteroids spawning and despawning
                 - ...
+
+        - Variables
 
     - Utils
         - [+] Worker for parallel execution (i.e. game state update)
