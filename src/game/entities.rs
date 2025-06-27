@@ -42,7 +42,8 @@ pub const ASTEROID_INDICES: [u32; 24] = [
     0, 8, 1, //
 ];
 
-pub const ASTEROID_VELOCITY_RANGE: RangeInclusive<f32> = 0.25..=1.5;
+pub const ASTEROID_SIZE_RANGE: RangeInclusive<f32> = 1.0..=8.0;
+pub const ASTEROID_VELOCITY_RANGE: RangeInclusive<f32> = 0.25..=3.0;
 pub const ASTEROID_ROTATION_VELOCITY_RANGE: RangeInclusive<f32> = 0.25..=2.0;
 
 bitflags! {
@@ -113,9 +114,10 @@ impl Default for Asteroid {
         let mut body: [Vec2; ASTEROID_SEGMENTS] = Default::default();
 
         let angle_step = 2.0 * PI / ASTEROID_SEGMENTS as f32;
+        let size = rand::random_range(ASTEROID_SIZE_RANGE);
 
         for segment in 0..ASTEROID_SEGMENTS {
-            let radius = rand::random_range(ASTEROID_SEGMENT_RANGE);
+            let radius = size * rand::random_range(ASTEROID_SEGMENT_RANGE);
             let angle = angle_step * segment as f32;
 
             let x = radius * angle.sin();

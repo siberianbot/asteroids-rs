@@ -20,6 +20,9 @@ use crate::{
 
 pub mod entities;
 
+const MAX_DISTANCE: f32 = 100.0;
+const SAFE_DISTANCE: RangeInclusive<f32> = 15.0..=MAX_DISTANCE;
+
 pub struct PlayerState {
     pub spacecraft_id: EntityId,
     pub camera_id: EntityId,
@@ -116,8 +119,6 @@ impl Game {
     }
 
     fn respawn_asteroids(&self, delta: f32) {
-        const SAFE_DISTANCE: RangeInclusive<f32> = 10.0..=20.0;
-
         let mut state = self.asteroid_respawn_state.lock().unwrap();
 
         state.timer -= delta;
@@ -360,7 +361,7 @@ impl Game {
         if let Some(asteroid_position) = asteroid_position {
             let distance = player_position.distance(asteroid_position);
 
-            if distance >= 25.0 {
+            if distance >= MAX_DISTANCE {
                 context.destroy();
             }
         }
