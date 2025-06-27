@@ -146,10 +146,27 @@ impl Default for Asteroid {
     }
 }
 
+pub struct Bullet {
+    pub position: Vec2,
+    pub velocity: Vec2,
+    pub owner_id: EntityId,
+}
+
+impl Default for Bullet {
+    fn default() -> Self {
+        Self {
+            position: Default::default(),
+            velocity: Default::default(),
+            owner_id: Default::default(),
+        }
+    }
+}
+
 pub enum Entity {
     Camera(Camera),
     Spacecraft(Spacecraft),
     Asteroid(Asteroid),
+    Bullet(Bullet),
 }
 
 impl Entity {
@@ -215,6 +232,27 @@ impl Entity {
             _ => panic!("entity is not a asteroid"),
         }
     }
+
+    pub fn as_bullet(&self) -> Option<&Bullet> {
+        match self {
+            Entity::Bullet(bullet) => Some(bullet),
+            _ => None,
+        }
+    }
+
+    pub fn to_bullet(&self) -> &Bullet {
+        match self {
+            Entity::Bullet(bullet) => bullet,
+            _ => panic!("entity is not a bullet"),
+        }
+    }
+
+    pub fn to_bullet_mut(&mut self) -> &mut Bullet {
+        match self {
+            Entity::Bullet(bullet) => bullet,
+            _ => panic!("entity is not a bullet"),
+        }
+    }
 }
 
 impl From<Camera> for Entity {
@@ -232,6 +270,12 @@ impl From<Spacecraft> for Entity {
 impl From<Asteroid> for Entity {
     fn from(asteroid: Asteroid) -> Self {
         Entity::Asteroid(asteroid)
+    }
+}
+
+impl From<Bullet> for Entity {
+    fn from(bullet: Bullet) -> Self {
+        Entity::Bullet(bullet)
     }
 }
 
