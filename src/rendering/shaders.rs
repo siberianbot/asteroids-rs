@@ -16,6 +16,31 @@ pub struct Entity {
     pub matrix: Mat4,
 }
 
+pub mod bullet_vs {
+    vulkano_shaders::shader! {
+        ty: "vertex",
+        src: r"
+#version 460
+
+layout (location = 0) in vec2 in_position;
+
+layout (binding = 0) uniform Entity {
+    vec3 color;
+    mat4 matrix;
+} entity;
+
+layout (location = 0) out vec3 out_color;
+
+void main() {
+    gl_PointSize = 20.0;
+    gl_Position = entity.matrix * vec4(in_position, 0.0, 1.0);
+
+    out_color = entity.color;
+}
+        "
+    }
+}
+
 pub mod entity_vs {
     vulkano_shaders::shader! {
         ty: "vertex",

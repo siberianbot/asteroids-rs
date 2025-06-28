@@ -32,6 +32,7 @@ use vulkano::{
             GraphicsPipelineCreateInfo,
             color_blend::ColorBlendState,
             input_assembly::{InputAssemblyState, PrimitiveTopology},
+            rasterization::RasterizationState,
             subpass::{PipelineRenderingCreateInfo, PipelineSubpassType},
             vertex_input::{Vertex as VertexTrait, VertexDefinition},
             viewport::{Viewport, ViewportState},
@@ -501,7 +502,11 @@ impl Backend {
         buffer
     }
 
-    pub fn create_pipeline<I, F>(&self, shaders_iter: I) -> Arc<GraphicsPipeline>
+    pub fn create_pipeline<I, F>(
+        &self,
+        topology: PrimitiveTopology,
+        shaders_iter: I,
+    ) -> Arc<GraphicsPipeline>
     where
         I: IntoIterator<Item = (ShaderStage, F)>,
         F: FnOnce(Arc<Device>) -> Result<Arc<ShaderModule>, Validated<VulkanError>>,
@@ -540,7 +545,10 @@ impl Backend {
         let create_info = GraphicsPipelineCreateInfo {
             stages: stages.into_iter().collect(),
             vertex_input_state: Some(vertex_input_state),
-            input_assembly_state: Some(Default::default()),
+            input_assembly_state: Some(InputAssemblyState {
+                topology,
+                ..Default::default()
+            }),
             rasterization_state: Some(Default::default()),
             multisample_state: Some(Default::default()),
             viewport_state: Some(ViewportState {

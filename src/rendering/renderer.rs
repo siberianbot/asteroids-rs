@@ -14,7 +14,10 @@ use vulkano::{
     },
     descriptor_set::{DescriptorSet, WriteDescriptorSet, allocator::DescriptorSetAllocator},
     format::ClearValue,
-    pipeline::{GraphicsPipeline, Pipeline, PipelineBindPoint, graphics::viewport::Viewport},
+    pipeline::{
+        GraphicsPipeline, Pipeline, PipelineBindPoint,
+        graphics::{input_assembly::PrimitiveTopology, viewport::Viewport},
+    },
     render_pass::{AttachmentLoadOp, AttachmentStoreOp},
 };
 
@@ -26,7 +29,7 @@ use crate::{
     },
     rendering::{
         backend::{ShaderFactory, ShaderStage},
-        shaders::{Vertex, entity_fs, entity_vs},
+        shaders::{Vertex, bullet_vs, entity_fs, entity_vs},
     },
     worker::Worker,
 };
@@ -34,6 +37,7 @@ use crate::{
 use super::{backend::Backend, shaders::Entity};
 
 struct RenderData {
+    pipeline: Arc<GraphicsPipeline>,
     entity_buffer: Subbuffer<Entity>,
     entity_buffer_descriptor_set: Arc<DescriptorSet>,
     vertex_buffer: Subbuffer<[Vertex]>,
@@ -44,6 +48,7 @@ struct Inner {
     game: Arc<Game>,
     backend: Arc<Backend>,
     entity_pipeline: Arc<GraphicsPipeline>,
+    bullet_pipeline: Arc<GraphicsPipeline>,
     render_data: Mutex<BTreeMap<EntityId, RenderData>>,
     spacecraft_vertex_buffer: Subbuffer<[Vertex]>,
     spacecraft_index_buffer: Subbuffer<[u32]>,
@@ -58,10 +63,20 @@ impl Inner {
             game,
             command_buffer_allocator: backend.create_command_buffer_allocator(),
             descriptor_set_allocator: backend.create_descriptor_set_allocator(),
-            entity_pipeline: backend.create_pipeline([
-                (ShaderStage::Vertex, entity_vs::load as ShaderFactory),
-                (ShaderStage::Fragment, entity_fs::load as ShaderFactory),
-            ]),
+            entity_pipeline: backend.create_pipeline(
+                PrimitiveTopology::TriangleList,
+                [
+                    (ShaderStage::Vertex, entity_vs::load as ShaderFactory),
+                    (ShaderStage::Fragment, entity_fs::load as ShaderFactory),
+                ],
+            ),
+            bullet_pipeline: backend.create_pipeline(
+                PrimitiveTopology::TriangleList,
+                [
+                    (ShaderStage::Vertex, bullet_vs::load as ShaderFactory),
+                    (ShaderStage::Fragment, entity_fs::load as ShaderFactory),
+                ],
+            ),
             render_data: Default::default(),
             spacecraft_vertex_buffer: backend
                 .create_buffer_iter(BufferUsage::VERTEX_BUFFER, SPACECRAFT_VERTICES),
@@ -108,10 +123,6 @@ impl Inner {
                     .into(),
                 )
                 .expect("failed to set viewport");
-
-            command_buffer_builder
-                .bind_pipeline_graphics(self.entity_pipeline.clone())
-                .expect("failed to bind entities pipeline");
 
             let entities = self.game.entities();
             let mut render_data = self.render_data.lock().unwrap();
@@ -163,11 +174,23 @@ impl Inner {
                                 )
                             }
 
+                            entities::Entity::Bullet(bullet) => {
+                                Mat4::from_scale_rotation_translation(
+                                    Vec3::ONE,
+                                    Quat::default(),
+                                    Vec3::new(bullet.position.x, bullet.position.y, 0.0),
+                                )
+                            }
+
                             _ => unreachable!(),
                         };
 
                         entity_buffer.matrix = camera_matrix * model
                     }
+
+                    command_buffer_builder
+                        .bind_pipeline_graphics(render_data.pipeline.clone())
+                        .expect("failed to bind entity pipeline");
 
                     command_buffer_builder
                         .bind_vertex_buffers(0, render_data.vertex_buffer.clone())
@@ -208,14 +231,19 @@ impl Inner {
     fn create_render_data(&self, entity: &entities::Entity) -> Option<RenderData> {
         let entity_buffer: Subbuffer<Entity> =
             self.backend.create_buffer(BufferUsage::UNIFORM_BUFFER);
+
+        let pipeline = match entity {
+            entities::Entity::Spacecraft(_) | entities::Entity::Asteroid(_) => {
+                self.entity_pipeline.clone()
+            }
+
+            entities::Entity::Bullet(_) => self.bullet_pipeline.clone(),
+
+            _ => return None,
+        };
+
         let entity_buffer_descriptor_set = {
-            let layout = self
-                .entity_pipeline
-                .layout()
-                .set_layouts()
-                .get(0)
-                .cloned()
-                .unwrap();
+            let layout = pipeline.layout().set_layouts().get(0).cloned().unwrap();
 
             DescriptorSet::new(
                 self.descriptor_set_allocator.clone(),
@@ -232,12 +260,13 @@ impl Inner {
                     entity_buffer.write().unwrap().color = Vec3::new(0.1, 0.8, 0.1);
                 }
 
-                Some(RenderData {
+                RenderData {
+                    pipeline,
                     entity_buffer,
                     entity_buffer_descriptor_set,
                     vertex_buffer: self.spacecraft_vertex_buffer.clone(),
                     index_buffer: self.spacecraft_index_buffer.clone(),
-                })
+                }
             }
 
             entities::Entity::Asteroid(asteroid) => {
@@ -250,20 +279,41 @@ impl Inner {
                     .map(|position| Vertex { position })
                     .collect::<Vec<_>>();
 
-                Some(RenderData {
+                RenderData {
+                    pipeline,
                     entity_buffer,
                     entity_buffer_descriptor_set,
                     vertex_buffer: self
                         .backend
                         .create_buffer_iter(BufferUsage::VERTEX_BUFFER, vertices),
                     index_buffer: self.asteroid_index_buffer.clone(),
-                })
+                }
             }
 
-            _ => None,
+            entities::Entity::Bullet(_) => {
+                {
+                    entity_buffer.write().unwrap().color = Vec3::new(1.0, 1.0, 1.0);
+                }
+
+                let vertices = once(Vertex {
+                    position: Vec2::ZERO,
+                });
+
+                RenderData {
+                    pipeline,
+                    entity_buffer,
+                    entity_buffer_descriptor_set,
+                    vertex_buffer: self
+                        .backend
+                        .create_buffer_iter(BufferUsage::VERTEX_BUFFER, vertices),
+                    index_buffer: self.asteroid_index_buffer.clone(),
+                }
+            }
+
+            _ => unreachable!(),
         };
 
-        render_data
+        Some(render_data)
     }
 
     fn dispatch_entity_created(&self, entity_id: EntityId) {
