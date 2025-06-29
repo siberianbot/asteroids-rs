@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex, mpsc};
 
-use crate::game::entities::{EntityId, PlayerMovement};
+use crate::game::entities::{EntityId, PlayerAction};
 
 #[derive(Clone)]
 pub struct Sender<T> {
@@ -80,8 +80,9 @@ impl<T> Dispatcher<T> {
 #[non_exhaustive]
 pub enum Command {
     Exit,
-    PlayerMovementDown(PlayerMovement),
-    PlayerMovementUp(PlayerMovement),
+    PlayerActionDown(PlayerAction),
+    PlayerActionUp(PlayerAction),
+    PlayerFire,
     ToggleCameraFollow,
     CameraZoomOut,
     CameraZoomIn,

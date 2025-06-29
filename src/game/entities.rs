@@ -9,7 +9,7 @@ use bitflags::bitflags;
 use glam::{Vec2, vec2};
 
 use crate::{
-    dispatch::{Dispatcher, Event, Sender},
+    dispatch::{Command, Dispatcher, Event, Sender},
     rendering::shaders::Vertex,
 };
 
@@ -48,11 +48,12 @@ pub const ASTEROID_ROTATION_VELOCITY_RANGE: RangeInclusive<f32> = 0.25..=2.0;
 
 bitflags! {
     #[derive(Clone, Copy, Debug, PartialEq)]
-    pub struct PlayerMovement : u32{
+    pub struct PlayerAction : u32{
         const ACCELERATE = 1 << 0;
         const DECELERATE = 1 << 1;
         const INCLINE_LEFT = 1 << 2;
         const INCLINE_RIGHT = 1 << 3;
+        const FIRE = 1 << 4;
     }
 }
 
@@ -84,7 +85,8 @@ impl Default for Camera {
 pub struct Spacecraft {
     pub position: Vec2,
     pub rotation: f32,
-    pub movement: PlayerMovement,
+    pub action: PlayerAction,
+    pub fire_cooldown: f32,
     pub velocity: Vec2,
     pub acceleration: Vec2,
 }
@@ -94,7 +96,8 @@ impl Default for Spacecraft {
         Self {
             position: Default::default(),
             rotation: Default::default(),
-            movement: PlayerMovement::empty(),
+            action: PlayerAction::empty(),
+            fire_cooldown: 0.0,
             velocity: Vec2::ZERO,
             acceleration: Vec2::ZERO,
         }

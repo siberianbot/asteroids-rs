@@ -5,7 +5,7 @@ use winit::{
 
 use crate::{
     dispatch::{Command, Dispatcher, Sender},
-    game::entities::PlayerMovement,
+    game::entities::PlayerAction,
 };
 
 pub struct InputController {
@@ -25,21 +25,25 @@ impl InputController {
         }
 
         let command = match event.physical_key {
-            PhysicalKey::Code(KeyCode::ArrowUp) | PhysicalKey::Code(KeyCode::KeyW) => Some(
-                Self::map_movement_command(event, PlayerMovement::ACCELERATE),
-            ),
+            PhysicalKey::Code(KeyCode::ArrowUp) | PhysicalKey::Code(KeyCode::KeyW) => {
+                Some(Self::map_movement_command(event, PlayerAction::ACCELERATE))
+            }
 
-            PhysicalKey::Code(KeyCode::ArrowDown) | PhysicalKey::Code(KeyCode::KeyS) => Some(
-                Self::map_movement_command(event, PlayerMovement::DECELERATE),
-            ),
+            PhysicalKey::Code(KeyCode::ArrowDown) | PhysicalKey::Code(KeyCode::KeyS) => {
+                Some(Self::map_movement_command(event, PlayerAction::DECELERATE))
+            }
 
             PhysicalKey::Code(KeyCode::ArrowLeft) | PhysicalKey::Code(KeyCode::KeyA) => Some(
-                Self::map_movement_command(event, PlayerMovement::INCLINE_LEFT),
+                Self::map_movement_command(event, PlayerAction::INCLINE_LEFT),
             ),
 
             PhysicalKey::Code(KeyCode::ArrowRight) | PhysicalKey::Code(KeyCode::KeyD) => Some(
-                Self::map_movement_command(event, PlayerMovement::INCLINE_RIGHT),
+                Self::map_movement_command(event, PlayerAction::INCLINE_RIGHT),
             ),
+
+            PhysicalKey::Code(KeyCode::Space) => {
+                Some(Self::map_movement_command(event, PlayerAction::FIRE))
+            }
 
             PhysicalKey::Code(KeyCode::KeyF) if event.state == ElementState::Released => {
                 Some(Command::ToggleCameraFollow)
@@ -61,10 +65,10 @@ impl InputController {
         }
     }
 
-    fn map_movement_command(event: KeyEvent, movement: PlayerMovement) -> Command {
+    fn map_movement_command(event: KeyEvent, movement: PlayerAction) -> Command {
         match event.state {
-            ElementState::Pressed => Command::PlayerMovementDown(movement),
-            ElementState::Released => Command::PlayerMovementUp(movement),
+            ElementState::Pressed => Command::PlayerActionDown(movement),
+            ElementState::Released => Command::PlayerActionUp(movement),
         }
     }
 }
