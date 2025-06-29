@@ -32,7 +32,7 @@ layout (binding = 0) uniform Entity {
 layout (location = 0) out vec3 out_color;
 
 void main() {
-    gl_PointSize = 20.0;
+    gl_PointSize = 5.0;
     gl_Position = entity.matrix * vec4(in_position, 0.0, 1.0);
 
     out_color = entity.color;

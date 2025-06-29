@@ -46,6 +46,11 @@ pub const ASTEROID_SIZE_RANGE: RangeInclusive<f32> = 1.0..=8.0;
 pub const ASTEROID_VELOCITY_RANGE: RangeInclusive<f32> = 0.25..=3.0;
 pub const ASTEROID_ROTATION_VELOCITY_RANGE: RangeInclusive<f32> = 0.25..=2.0;
 
+pub const BULLET_VERTICES: [Vertex; 1] = [Vertex {
+    position: Vec2::new(0.0, 0.0),
+}];
+pub const BULLET_INDICES: [u32; 1] = [0];
+
 bitflags! {
     #[derive(Clone, Copy, Debug, PartialEq)]
     pub struct PlayerAction : u32{

@@ -25,7 +25,10 @@ use crate::{
     dispatch::{Dispatcher, Event},
     game::{
         Game,
-        entities::{self, ASTEROID_INDICES, EntityId, SPACECRAFT_INDICES, SPACECRAFT_VERTICES},
+        entities::{
+            self, ASTEROID_INDICES, BULLET_INDICES, BULLET_VERTICES, EntityId, SPACECRAFT_INDICES,
+            SPACECRAFT_VERTICES,
+        },
     },
     rendering::{
         backend::{ShaderFactory, ShaderStage},
@@ -53,6 +56,8 @@ struct Inner {
     spacecraft_vertex_buffer: Subbuffer<[Vertex]>,
     spacecraft_index_buffer: Subbuffer<[u32]>,
     asteroid_index_buffer: Subbuffer<[u32]>,
+    bullet_vertex_buffer: Subbuffer<[Vertex]>,
+    bullet_index_buffer: Subbuffer<[u32]>,
     command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
     descriptor_set_allocator: Arc<dyn DescriptorSetAllocator>,
 }
@@ -71,7 +76,7 @@ impl Inner {
                 ],
             ),
             bullet_pipeline: backend.create_pipeline(
-                PrimitiveTopology::TriangleList,
+                PrimitiveTopology::PointList,
                 [
                     (ShaderStage::Vertex, bullet_vs::load as ShaderFactory),
                     (ShaderStage::Fragment, entity_fs::load as ShaderFactory),
@@ -84,6 +89,10 @@ impl Inner {
                 .create_buffer_iter(BufferUsage::INDEX_BUFFER, SPACECRAFT_INDICES),
             asteroid_index_buffer: backend
                 .create_buffer_iter(BufferUsage::INDEX_BUFFER, ASTEROID_INDICES),
+            bullet_vertex_buffer: backend
+                .create_buffer_iter(BufferUsage::VERTEX_BUFFER, BULLET_VERTICES),
+            bullet_index_buffer: backend
+                .create_buffer_iter(BufferUsage::INDEX_BUFFER, BULLET_INDICES),
             backend,
         };
 
@@ -295,18 +304,12 @@ impl Inner {
                     entity_buffer.write().unwrap().color = Vec3::new(1.0, 1.0, 1.0);
                 }
 
-                let vertices = once(Vertex {
-                    position: Vec2::ZERO,
-                });
-
                 RenderData {
                     pipeline,
                     entity_buffer,
                     entity_buffer_descriptor_set,
-                    vertex_buffer: self
-                        .backend
-                        .create_buffer_iter(BufferUsage::VERTEX_BUFFER, vertices),
-                    index_buffer: self.asteroid_index_buffer.clone(),
+                    vertex_buffer: self.bullet_vertex_buffer.clone(),
+                    index_buffer: self.bullet_index_buffer.clone(),
                 }
             }
 
