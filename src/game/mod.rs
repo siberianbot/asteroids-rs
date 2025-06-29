@@ -23,6 +23,7 @@ pub mod entities;
 const MAX_DISTANCE: f32 = 100.0;
 const SAFE_DISTANCE: RangeInclusive<f32> = 15.0..=MAX_DISTANCE;
 const FIRE_COOLDOWN: f32 = 0.5;
+const BULLET_VELOCITY: f32 = 12.5;
 
 pub struct State {
     pub spacecraft_id: EntityId,
@@ -194,7 +195,8 @@ impl Game {
 
                 let bullet = Bullet {
                     position,
-                    velocity: Vec2::ONE.rotate(rotation.sin_cos().into()),
+                    velocity: BULLET_VELOCITY
+                        * Vec2::new(1.0, 0.0).rotate(rotation.sin_cos().into()),
                     owner_id: self.state.spacecraft_id,
 
                     ..Default::default()
