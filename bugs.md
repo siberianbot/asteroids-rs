@@ -14,3 +14,6 @@ Legend:
 - [+] Resize of window does not changes size of viewport
     - Surface capabilities were not updated after window resize
     - Removed clamp between min/max extent from capabilities
+
+- [ ] Does not run on Fedora
+    - Rendering backend is not initialized -- invalid pointer to vkCreateSwapchainKhr
