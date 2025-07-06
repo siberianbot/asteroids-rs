@@ -12,6 +12,7 @@ use crate::{
     dispatch::{Command, Dispatcher, Event, Sender},
     game::Game,
     input::InputController,
+    physics::{self, Physics},
     rendering::{backend::Backend, renderer::Renderer},
     worker::Worker,
 };
@@ -97,6 +98,8 @@ struct App {
     game: Arc<Game>,
     _game_worker: Worker,
 
+    _physics_worker: Worker,
+
     inner: Option<Inner>,
 }
 
@@ -114,6 +117,7 @@ impl App {
         });
 
         let (game, game_worker) = Game::new(&command_dispatcher, &event_dispatcher);
+        let physics_worker = Physics::new(&event_dispatcher, &game);
 
         let dispatcher_worker = {
             let command_dispatcher = command_dispatcher.clone();
@@ -134,6 +138,8 @@ impl App {
 
             game,
             _game_worker: game_worker,
+
+            _physics_worker: physics_worker,
 
             inner: Default::default(),
         };

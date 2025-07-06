@@ -1,4 +1,7 @@
-use std::sync::{Arc, Mutex, mpsc};
+use std::{
+    collections::BTreeSet,
+    sync::{Arc, Mutex, mpsc},
+};
 
 use crate::game::entities::{EntityId, PlayerAction};
 
@@ -94,7 +97,7 @@ pub enum Event {
     WindowResized([u32; 2]),
     EntityCreated(EntityId),
     EntityDestroyed(EntityId),
-    CollisionDetected(/* TODO */),
+    CollisionDetected(BTreeSet<EntityId>),
 }
 
 #[cfg(test)]
