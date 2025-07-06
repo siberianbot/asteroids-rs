@@ -84,8 +84,8 @@ Legend:
     - Utils
         - [+] Worker for parallel execution (i.e. game state update)
 
-    - Physics
-        - R&D
+    - [~] Physics
+        - [~] R&D
 
     - [?] Configuration
         - Window configuration

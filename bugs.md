@@ -17,3 +17,5 @@ Legend:
 
 - [ ] Does not run on Fedora
     - Rendering backend is not initialized -- invalid pointer to vkCreateSwapchainKhr
+
+- [ ] Too much collision events hangs dispatch thread
