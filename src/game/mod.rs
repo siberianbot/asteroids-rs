@@ -259,8 +259,8 @@ impl Game {
         }
 
         match event {
-            Event::CollisionDetected(collided) => {
-                let colliders = collided
+            Event::CollisionStarted(collision) => {
+                let colliders = collision
                     .iter()
                     .filter_map(|entity_id| {
                         self.entities
@@ -275,7 +275,7 @@ impl Game {
 
                 if colliders.contains(&Collider::Asteroid) && colliders.contains(&Collider::Bullet)
                 {
-                    for entity_id in collided {
+                    for entity_id in collision {
                         self.entities.destroy(*entity_id);
                     }
                 }

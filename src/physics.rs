@@ -82,10 +82,13 @@ const BULLET_COLLIDERS: &[Collider] = &[
 const DEFAULT_RADIUS: f32 = 1.0;
 const ASTEROID_ADDITIONAL_RADIUS: f32 = 2.0;
 
+type Collision = BTreeSet<EntityId>;
+
 pub struct Physics {
     event_sender: Sender<Event>,
     entities: Arc<Entities<State>>,
-    groups: Mutex<BTreeMap<EntityId, ColliderGroup>>,
+    colliders: Mutex<BTreeMap<EntityId, ColliderGroup>>,
+    collisions: Mutex<BTreeSet<Collision>>,
 }
 
 impl Physics {
@@ -93,7 +96,8 @@ impl Physics {
         let physics = Physics {
             event_sender: event_dispatcher.create_sender(),
             entities: game.entities(),
-            groups: Default::default(),
+            colliders: Default::default(),
+            collisions: Default::default(),
         };
 
         let physics = Arc::new(physics);
@@ -141,12 +145,12 @@ impl Physics {
                         .flatten();
 
                     if let Some(group) = group {
-                        physics.groups.lock().unwrap().insert(*entity_id, group);
+                        physics.colliders.lock().unwrap().insert(*entity_id, group);
                     }
                 }
 
                 Event::EntityDestroyed(entity_id) => {
-                    physics.groups.lock().unwrap().remove(entity_id);
+                    physics.colliders.lock().unwrap().remove(entity_id);
                 }
 
                 _ => {}
@@ -168,7 +172,7 @@ impl Physics {
     }
 
     fn update(&self) {
-        let mut groups = self.groups.lock().unwrap();
+        let mut groups = self.colliders.lock().unwrap();
 
         for (entity_id, group) in groups.iter_mut() {
             let position_rotation = self.entities.visit(*entity_id, |entity| match entity {
@@ -196,38 +200,47 @@ impl Physics {
             collider: Collider,
         }
 
-        let groups = self.groups.lock().unwrap();
+        let groups = self.colliders.lock().unwrap();
 
-        let left_iter = groups.iter().flat_map(|(entity_id, group)| {
-            group.colliders.iter().map(|collider| Item {
-                entity_id: *entity_id,
-                radius: group.radius,
-                position: group.position,
-                collider: translate_rotate(collider, group.position, group.rotation),
-            })
-        });
-
-        for left in left_iter {
-            let collisions: BTreeSet<_> = groups
-                .iter()
-                .flat_map(|(entity_id, group)| {
-                    group.colliders.iter().map(|collider| Item {
-                        entity_id: *entity_id,
-                        radius: group.radius,
-                        position: group.position,
-                        collider: translate_rotate(collider, group.position, group.rotation),
-                    })
+        let mut collisions = self.collisions.lock().unwrap();
+        let current_collisions = groups
+            .iter()
+            .flat_map(|(entity_id, group)| {
+                group.colliders.iter().map(|collider| Item {
+                    entity_id: *entity_id,
+                    radius: group.radius,
+                    position: group.position,
+                    collider: translate_rotate(collider, group.position, group.rotation),
                 })
-                .filter(|right| left.entity_id < right.entity_id)
-                .filter(|right| left.position.distance(right.position) < left.radius + right.radius)
-                .filter(|right| collision_test(&left.collider, &right.collider))
-                .map(|right| (left.entity_id, right.entity_id))
-                .collect();
+            })
+            .flat_map(|left| {
+                groups
+                    .iter()
+                    .flat_map(|(entity_id, group)| {
+                        group.colliders.iter().map(|collider| Item {
+                            entity_id: *entity_id,
+                            radius: group.radius,
+                            position: group.position,
+                            collider: translate_rotate(collider, group.position, group.rotation),
+                        })
+                    })
+                    .filter(move |right| left.entity_id < right.entity_id)
+                    .filter(move |right| {
+                        left.position.distance(right.position) < left.radius + right.radius
+                    })
+                    .filter(move |right| collision_test(&left.collider, &right.collider))
+                    .map(move |right| Collision::from([left.entity_id, right.entity_id]))
+            })
+            .collect::<BTreeSet<_>>();
 
-            for (left, right) in collisions {
-                self.event_sender
-                    .send(Event::CollisionDetected([left, right].into()));
-            }
+        for collision in current_collisions.difference(&collisions).cloned() {
+            self.event_sender.send(Event::CollisionStarted(collision));
         }
+
+        for collision in collisions.difference(&current_collisions).cloned() {
+            self.event_sender.send(Event::CollisionFinished(collision));
+        }
+
+        *collisions = current_collisions;
     }
 }
