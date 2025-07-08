@@ -1,4 +1,5 @@
 use std::{
+    collections::{BTreeMap, BTreeSet},
     f32::consts::PI,
     ops::{Div, Mul, RangeInclusive},
     sync::{Arc, Mutex, atomic::Ordering},
@@ -104,6 +105,14 @@ impl Game {
 
             command_dispatcher.add_handler(move |command| {
                 game.handle_command(command);
+            });
+        }
+
+        {
+            let game = game.clone();
+
+            event_dispatcher.add_handler(move |event| {
+                game.handle_event(event);
             });
         }
 
@@ -237,6 +246,40 @@ impl Game {
                         .clamp(CAMERA_MIN_DISTANCE, CAMERA_MAX_DISTANCE);
                 })
                 .expect("there is not camera entity"),
+
+            _ => {}
+        }
+    }
+
+    fn handle_event(&self, event: &Event) {
+        #[derive(PartialEq, Eq, PartialOrd, Ord)]
+        enum Collider {
+            Asteroid,
+            Bullet,
+        }
+
+        match event {
+            Event::CollisionDetected(collided) => {
+                let colliders = collided
+                    .iter()
+                    .filter_map(|entity_id| {
+                        self.entities
+                            .visit(*entity_id, |entity| match entity {
+                                Entity::Asteroid(_) => Some(Collider::Asteroid),
+                                Entity::Bullet(_) => Some(Collider::Bullet),
+                                _ => None,
+                            })
+                            .flatten()
+                    })
+                    .collect::<BTreeSet<_>>();
+
+                if colliders.contains(&Collider::Asteroid) && colliders.contains(&Collider::Bullet)
+                {
+                    for entity_id in collided {
+                        self.entities.destroy(*entity_id);
+                    }
+                }
+            }
 
             _ => {}
         }
