@@ -7,14 +7,15 @@ use std::{
     time::{Duration, Instant},
 };
 
-use entities::{Entities, Entity, UpdateContext};
+use entities::{Entities, UpdateContext};
 use glam::Vec2;
 
 use crate::{
     dispatch::{Command, Dispatcher, Event, Sender},
+    entity::{Asteroid, Camera, CameraComponent, Entity, Spacecraft, TransformComponent},
     game::entities::{
-        Asteroid, Bullet, CAMERA_DISTANCE_MULTIPLIER, CAMERA_MAX_DISTANCE, CAMERA_MIN_DISTANCE,
-        Camera, EntityId, PlayerAction, Spacecraft,
+        CAMERA_DISTANCE_MULTIPLIER, CAMERA_MAX_DISTANCE, CAMERA_MIN_DISTANCE, EntityId,
+        PlayerAction,
     },
     worker::Worker,
 };
@@ -62,7 +63,10 @@ impl Game {
 
         let spacecraft_entity_id = entities.create(Spacecraft::default());
         let camera_entity_id = entities.create(Camera {
-            target: spacecraft_entity_id,
+            camera: CameraComponent {
+                target: Some(spacecraft_entity_id),
+                ..Default::default()
+            },
             ..Default::default()
         });
 
@@ -145,7 +149,7 @@ impl Game {
         let count = self
             .entities
             .iter()
-            .filter_map(|(_, entity)| entity.as_asteroid())
+            .filter_map(|(_, entity)| entity.asteroid())
             .count();
 
         if count >= 16 {
@@ -158,15 +162,15 @@ impl Game {
         let position = self
             .entities
             .visit(self.state.spacecraft_id, |entity| {
-                entity.as_spacecraft().map(|spacecraft| {
-                    spacecraft.position + distance * Vec2::ONE.rotate(rotation.sin_cos().into())
-                })
+                entity.transform().position + distance * Vec2::ONE.rotate(rotation.sin_cos().into())
             })
-            .flatten()
             .expect("there is no player entity");
 
         let asteroid = Asteroid {
-            position,
+            transform: TransformComponent {
+                position,
+                ..Default::default()
+            },
             ..Asteroid::default()
         };
 
@@ -177,47 +181,46 @@ impl Game {
 
     fn handle_command(&self, command: &Command) {
         match command {
-            Command::PlayerActionDown(action) => self
-                .entities
-                .visit_mut(self.state.spacecraft_id, |entity| {
-                    entity.to_spacecraft_mut().action |= *action;
-                })
-                .expect("there is not player entity"),
+            // Command::PlayerActionDown(action) => self
+            //     .entities
+            //     .visit_mut(self.state.spacecraft_id, |entity| {
+            //         entity.to_spacecraft_mut().action |= *action;
+            //     })
+            //     .expect("there is not player entity"),
 
-            Command::PlayerActionUp(action) => self
-                .entities
-                .visit_mut(self.state.spacecraft_id, |entity| {
-                    entity.to_spacecraft_mut().action &= !*action;
-                })
-                .expect("there is not player entity"),
+            // Command::PlayerActionUp(action) => self
+            //     .entities
+            //     .visit_mut(self.state.spacecraft_id, |entity| {
+            //         entity.to_spacecraft_mut().action &= !*action;
+            //     })
+            //     .expect("there is not player entity"),
 
-            Command::PlayerFire => {
-                let (position, rotation) = self
-                    .entities
-                    .visit_mut(self.state.spacecraft_id, |entity| {
-                        let spacecraft = entity.to_spacecraft_mut();
-                        spacecraft.fire_cooldown = FIRE_COOLDOWN;
+            // Command::PlayerFire => {
+            //     let (position, rotation) = self
+            //         .entities
+            //         .visit_mut(self.state.spacecraft_id, |entity| {
+            //             let spacecraft = entity.to_spacecraft_mut();
+            //             spacecraft.fire_cooldown = FIRE_COOLDOWN;
 
-                        (spacecraft.position, spacecraft.rotation)
-                    })
-                    .expect("there is not player entity");
+            //             (spacecraft.position, spacecraft.rotation)
+            //         })
+            //         .expect("there is not player entity");
 
-                let bullet = Bullet {
-                    position,
-                    velocity: BULLET_VELOCITY
-                        * Vec2::new(1.0, 0.0).rotate(rotation.sin_cos().into()),
-                    owner_id: self.state.spacecraft_id,
+            //     let bullet = Bullet {
+            //         position,
+            //         velocity: BULLET_VELOCITY
+            //             * Vec2::new(1.0, 0.0).rotate(rotation.sin_cos().into()),
+            //         owner_id: self.state.spacecraft_id,
 
-                    ..Default::default()
-                };
+            //         ..Default::default()
+            //     };
 
-                self.entities.create(bullet);
-            }
-
+            //     self.entities.create(bullet);
+            // }
             Command::ToggleCameraFollow => self
                 .entities
                 .visit_mut(self.state.camera_id, |entity| {
-                    let camera = entity.to_camera_mut();
+                    let camera = entity.camera_mut().unwrap();
 
                     camera.follow = !camera.follow;
                 })
@@ -226,10 +229,10 @@ impl Game {
             Command::CameraZoomIn => self
                 .entities
                 .visit_mut(self.state.camera_id, |entity| {
-                    let camera = entity.to_camera_mut();
+                    let camera = entity.camera_mut().unwrap();
 
-                    camera.target_distance = camera
-                        .target_distance
+                    camera.distance = camera
+                        .distance
                         .div(CAMERA_DISTANCE_MULTIPLIER)
                         .clamp(CAMERA_MIN_DISTANCE, CAMERA_MAX_DISTANCE);
                 })
@@ -238,10 +241,10 @@ impl Game {
             Command::CameraZoomOut => self
                 .entities
                 .visit_mut(self.state.camera_id, |entity| {
-                    let camera = entity.to_camera_mut();
+                    let camera = entity.camera_mut().unwrap();
 
-                    camera.target_distance = camera
-                        .target_distance
+                    camera.distance = camera
+                        .distance
                         .mul(CAMERA_DISTANCE_MULTIPLIER)
                         .clamp(CAMERA_MIN_DISTANCE, CAMERA_MAX_DISTANCE);
                 })
@@ -288,14 +291,14 @@ impl Game {
     fn camera_sync(context: UpdateContext<State>) {
         let position = context
             .current_entity()
-            .as_camera()
+            .camera()
             .filter(|camera| camera.follow)
             .and_then(|camera| {
                 context
-                    .get_entity(camera.target)
+                    .get_entity(camera.target.unwrap())
                     .and_then(|target| match target {
-                        Entity::Spacecraft(spacecraft) => Some(spacecraft.position),
-                        Entity::Asteroid(asteroid) => Some(asteroid.position),
+                        Entity::Spacecraft(spacecraft) => Some(spacecraft.transform.position),
+                        Entity::Asteroid(asteroid) => Some(asteroid.transform.position),
 
                         _ => None,
                     })
@@ -303,7 +306,7 @@ impl Game {
 
         if let Some(position) = position {
             context.modify(|entity| {
-                entity.to_camera_mut().position = position;
+                entity.transform_mut().position = position;
             });
         }
     }
@@ -312,19 +315,14 @@ impl Game {
         const ZOOM_EPSILON: f32 = 0.1;
         const ZOOM_SPEED: f32 = 2.0;
 
-        let distance = context.current_entity().as_camera().map(|camera| {
-            let diff = camera.target_distance - camera.distance;
-
-            if diff.abs() < ZOOM_EPSILON {
-                return camera.target_distance;
-            }
-
-            camera.distance + context.delta() * ZOOM_SPEED * diff
-        });
+        let distance = context
+            .current_entity()
+            .camera()
+            .map(|camera| camera.distance);
 
         if let Some(distance) = distance {
             context.modify(|entity| {
-                entity.to_camera_mut().distance = distance;
+                entity.camera_mut().unwrap().distance = distance;
             });
         }
     }
@@ -335,11 +333,13 @@ impl Game {
 
         match context.current_entity() {
             Entity::Asteroid(asteroid) => {
-                let position = asteroid.position + context.delta() * asteroid.velocity;
-                let rotation = asteroid.rotation + context.delta() * asteroid.rotation_velocity;
+                let position =
+                    asteroid.transform.position + context.delta() * asteroid.movement.velocity;
+                let rotation = asteroid.transform.rotation
+                    + context.delta() * asteroid.asteroid.rotation_velocity;
 
                 context.modify(|entity| {
-                    let asteroid = entity.to_asteroid_mut();
+                    let asteroid = entity.transform_mut();
 
                     asteroid.position = position;
                     asteroid.rotation = rotation;
@@ -347,28 +347,28 @@ impl Game {
             }
 
             Entity::Spacecraft(spacecraft) => {
-                let acceleration = if spacecraft.acceleration.length() < BREAKING_EPSILON {
-                    -1.0 * spacecraft.velocity * BREAKING_MULTIPLIER
+                let acceleration = if spacecraft.movement.acceleration.length() < BREAKING_EPSILON {
+                    -1.0 * spacecraft.movement.velocity * BREAKING_MULTIPLIER
                 } else {
-                    spacecraft.acceleration
+                    spacecraft.movement.acceleration
                 };
 
-                let velocity = spacecraft.velocity + context.delta() * acceleration;
-                let position = spacecraft.position + context.delta() * spacecraft.velocity;
+                let velocity = spacecraft.movement.velocity + context.delta() * acceleration;
+                let position =
+                    spacecraft.transform.position + context.delta() * spacecraft.movement.velocity;
 
                 context.modify(|entity| {
-                    let spacecraft = entity.to_spacecraft_mut();
-
-                    spacecraft.velocity = velocity;
-                    spacecraft.position = position;
+                    entity.movement_mut().unwrap().velocity = velocity;
+                    entity.transform_mut().position = position;
                 });
             }
 
             Entity::Bullet(bullet) => {
-                let position = bullet.position + context.delta() * bullet.velocity;
+                let position =
+                    bullet.transform.position + context.delta() * bullet.movement.velocity;
 
                 context.modify(|entity| {
-                    let bullet = entity.to_bullet_mut();
+                    let bullet = entity.transform_mut();
 
                     bullet.position = position;
                 });
@@ -389,74 +389,73 @@ impl Game {
             rotation: f32,
         }
 
-        let changes = context.current_entity().as_spacecraft().map(|spacecraft| {
-            let mut changes = Changes {
-                acceleration: Vec2::ZERO,
-                rotation: spacecraft.rotation,
-            };
+        // let changes = context.current_entity().as_spacecraft().map(|spacecraft| {
+        //     let mut changes = Changes {
+        //         acceleration: Vec2::ZERO,
+        //         rotation: spacecraft.rotation,
+        //     };
 
-            let acceleration_vec = VEC.rotate(spacecraft.rotation.sin_cos().into());
+        //     let acceleration_vec = VEC.rotate(spacecraft.rotation.sin_cos().into());
 
-            if spacecraft.action.contains(PlayerAction::ACCELERATE) {
-                changes.acceleration += ACCELERATION * acceleration_vec;
-            }
+        //     if spacecraft.action.contains(PlayerAction::ACCELERATE) {
+        //         changes.acceleration += ACCELERATION * acceleration_vec;
+        //     }
 
-            if spacecraft.action.contains(PlayerAction::DECELERATE) {
-                changes.acceleration += DECELERATION * acceleration_vec;
-            }
+        //     if spacecraft.action.contains(PlayerAction::DECELERATE) {
+        //         changes.acceleration += DECELERATION * acceleration_vec;
+        //     }
 
-            if spacecraft.action.contains(PlayerAction::INCLINE_LEFT) {
-                changes.rotation += context.delta() * ROTATION_VELOCITY;
-            }
+        //     if spacecraft.action.contains(PlayerAction::INCLINE_LEFT) {
+        //         changes.rotation += context.delta() * ROTATION_VELOCITY;
+        //     }
 
-            if spacecraft.action.contains(PlayerAction::INCLINE_RIGHT) {
-                changes.rotation -= context.delta() * ROTATION_VELOCITY;
-            }
+        //     if spacecraft.action.contains(PlayerAction::INCLINE_RIGHT) {
+        //         changes.rotation -= context.delta() * ROTATION_VELOCITY;
+        //     }
 
-            if spacecraft.action.contains(PlayerAction::FIRE) && spacecraft.fire_cooldown == 0.0 {
-                context.data().command_sender.send(Command::PlayerFire);
-            }
+        //     if spacecraft.action.contains(PlayerAction::FIRE) && spacecraft.fire_cooldown == 0.0 {
+        //         context.data().command_sender.send(Command::PlayerFire);
+        //     }
 
-            // TODO: map rotation to [0; 2pi]
+        //     // TODO: map rotation to [0; 2pi]
 
-            changes
-        });
+        //     changes
+        // });
 
-        if let Some(changes) = changes {
-            context.modify(|entity| {
-                let spacecraft = entity.to_spacecraft_mut();
+        // if let Some(changes) = changes {
+        //     context.modify(|entity| {
+        //         let spacecraft = entity.to_spacecraft_mut();
 
-                spacecraft.acceleration = changes.acceleration;
-                spacecraft.rotation = changes.rotation;
-            });
-        }
+        //         spacecraft.acceleration = changes.acceleration;
+        //         spacecraft.rotation = changes.rotation;
+        //     });
+        // }
     }
 
     fn spacecraft_fire_cooldown(context: UpdateContext<State>) {
-        let fire_cooldown = context.current_entity().as_spacecraft().map(|spacecraft| {
-            if spacecraft.fire_cooldown <= 0.0 {
+        let fire_cooldown = context.current_entity().spacecraft().map(|spacecraft| {
+            if spacecraft.cooldown <= 0.0 {
                 0.0
             } else {
-                spacecraft.fire_cooldown - context.delta()
+                spacecraft.cooldown - context.delta()
             }
         });
 
         if let Some(fire_cooldown) = fire_cooldown {
-            context.modify(move |entity| entity.to_spacecraft_mut().fire_cooldown = fire_cooldown);
+            context.modify(move |entity| entity.spacecraft_mut().unwrap().cooldown = fire_cooldown);
         }
     }
 
     fn entities_despawn(context: UpdateContext<State>) {
         let player_position = context
             .get_entity(context.data().spacecraft_id)
-            .and_then(|entity| entity.as_spacecraft())
-            .map(|spacecraft| spacecraft.position)
+            .map(|spacecraft| spacecraft.transform().position)
             .expect("there is no player entity");
 
         let entity_position = match context.current_entity() {
-            Entity::Spacecraft(spacecraft) => Some(spacecraft.position),
-            Entity::Asteroid(asteroid) => Some(asteroid.position),
-            Entity::Bullet(bullet) => Some(bullet.position),
+            Entity::Spacecraft(spacecraft) => Some(spacecraft.transform.position),
+            Entity::Asteroid(asteroid) => Some(asteroid.transform.position),
+            Entity::Bullet(bullet) => Some(bullet.transform.position),
 
             _ => None,
         };

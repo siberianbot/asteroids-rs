@@ -10,6 +10,7 @@ use glam::{Vec2, vec2};
 
 use crate::{
     dispatch::{Command, Dispatcher, Event, Sender},
+    entity::Entity,
     rendering::shaders::Vertex,
 };
 
@@ -66,228 +67,6 @@ pub const CAMERA_INITIAL_DISTANCE: f32 = 4.0;
 pub const CAMERA_MIN_DISTANCE: f32 = 1.0;
 pub const CAMERA_MAX_DISTANCE: f32 = 32.0;
 pub const CAMERA_DISTANCE_MULTIPLIER: f32 = 2.0;
-
-pub struct Camera {
-    pub position: Vec2,
-    pub distance: f32,
-    pub target_distance: f32,
-    pub target: EntityId,
-    pub follow: bool,
-}
-
-impl Default for Camera {
-    fn default() -> Self {
-        Self {
-            position: Default::default(),
-            distance: CAMERA_INITIAL_DISTANCE,
-            target_distance: CAMERA_INITIAL_DISTANCE,
-            target: Default::default(),
-            follow: true,
-        }
-    }
-}
-
-pub struct Spacecraft {
-    pub position: Vec2,
-    pub rotation: f32,
-    pub action: PlayerAction,
-    pub fire_cooldown: f32,
-    pub velocity: Vec2,
-    pub acceleration: Vec2,
-}
-
-impl Default for Spacecraft {
-    fn default() -> Self {
-        Self {
-            position: Default::default(),
-            rotation: Default::default(),
-            action: PlayerAction::empty(),
-            fire_cooldown: 0.0,
-            velocity: Vec2::ZERO,
-            acceleration: Vec2::ZERO,
-        }
-    }
-}
-
-pub struct Asteroid {
-    pub position: Vec2,
-    pub rotation: f32,
-    pub rotation_velocity: f32,
-    pub base_size: f32,
-    pub body: [Vec2; ASTEROID_SEGMENTS],
-    pub velocity: Vec2,
-}
-
-impl Default for Asteroid {
-    fn default() -> Self {
-        let mut body: [Vec2; ASTEROID_SEGMENTS] = Default::default();
-
-        let angle_step = 2.0 * PI / ASTEROID_SEGMENTS as f32;
-        let base_size = rand::random_range(ASTEROID_SIZE_RANGE) as f32;
-
-        for segment in 0..ASTEROID_SEGMENTS {
-            let radius = base_size + rand::random_range(ASTEROID_SEGMENT_RANGE);
-            let angle = angle_step * segment as f32;
-
-            let x = radius * angle.sin();
-            let y = radius * angle.cos();
-
-            body[segment] = vec2(x, y);
-        }
-
-        let center: Vec2 = body.iter().sum();
-
-        body.iter_mut().for_each(|segment| *segment -= center);
-
-        let rotation = rand::random_range(0.0..=2.0 * PI);
-        let rotation_velocity = rand::random_range(ASTEROID_ROTATION_VELOCITY_RANGE);
-
-        let velocity = rand::random_range(ASTEROID_VELOCITY_RANGE);
-        let velocity = velocity * Vec2::ONE.rotate(rotation.sin_cos().into());
-
-        Self {
-            position: Default::default(),
-            rotation,
-            rotation_velocity,
-            base_size,
-            body,
-            velocity,
-        }
-    }
-}
-
-pub struct Bullet {
-    pub position: Vec2,
-    pub velocity: Vec2,
-    pub owner_id: EntityId,
-}
-
-impl Default for Bullet {
-    fn default() -> Self {
-        Self {
-            position: Default::default(),
-            velocity: Default::default(),
-            owner_id: Default::default(),
-        }
-    }
-}
-
-pub enum Entity {
-    Camera(Camera),
-    Spacecraft(Spacecraft),
-    Asteroid(Asteroid),
-    Bullet(Bullet),
-}
-
-impl Entity {
-    pub fn as_camera(&self) -> Option<&Camera> {
-        match self {
-            Entity::Camera(camera) => Some(camera),
-            _ => None,
-        }
-    }
-
-    pub fn to_camera(&self) -> &Camera {
-        match self {
-            Entity::Camera(camera) => camera,
-            _ => panic!("entity is not a camera"),
-        }
-    }
-
-    pub fn to_camera_mut(&mut self) -> &mut Camera {
-        match self {
-            Entity::Camera(camera) => camera,
-            _ => panic!("entity is not a camera"),
-        }
-    }
-
-    pub fn as_spacecraft(&self) -> Option<&Spacecraft> {
-        match self {
-            Entity::Spacecraft(spacecraft) => Some(spacecraft),
-            _ => None,
-        }
-    }
-
-    pub fn to_spacecraft(&self) -> &Spacecraft {
-        match self {
-            Entity::Spacecraft(spacecraft) => spacecraft,
-            _ => panic!("entity is not a spacecraft"),
-        }
-    }
-
-    pub fn to_spacecraft_mut(&mut self) -> &mut Spacecraft {
-        match self {
-            Entity::Spacecraft(spacecraft) => spacecraft,
-            _ => panic!("entity is not a spacecraft"),
-        }
-    }
-
-    pub fn as_asteroid(&self) -> Option<&Asteroid> {
-        match self {
-            Entity::Asteroid(asteroid) => Some(asteroid),
-            _ => None,
-        }
-    }
-
-    pub fn to_asteroid(&self) -> &Asteroid {
-        match self {
-            Entity::Asteroid(asteroid) => asteroid,
-            _ => panic!("entity is not a asteroid"),
-        }
-    }
-
-    pub fn to_asteroid_mut(&mut self) -> &mut Asteroid {
-        match self {
-            Entity::Asteroid(asteroid) => asteroid,
-            _ => panic!("entity is not a asteroid"),
-        }
-    }
-
-    pub fn as_bullet(&self) -> Option<&Bullet> {
-        match self {
-            Entity::Bullet(bullet) => Some(bullet),
-            _ => None,
-        }
-    }
-
-    pub fn to_bullet(&self) -> &Bullet {
-        match self {
-            Entity::Bullet(bullet) => bullet,
-            _ => panic!("entity is not a bullet"),
-        }
-    }
-
-    pub fn to_bullet_mut(&mut self) -> &mut Bullet {
-        match self {
-            Entity::Bullet(bullet) => bullet,
-            _ => panic!("entity is not a bullet"),
-        }
-    }
-}
-
-impl From<Camera> for Entity {
-    fn from(camera: Camera) -> Self {
-        Entity::Camera(camera)
-    }
-}
-
-impl From<Spacecraft> for Entity {
-    fn from(spacecraft: Spacecraft) -> Self {
-        Entity::Spacecraft(spacecraft)
-    }
-}
-
-impl From<Asteroid> for Entity {
-    fn from(asteroid: Asteroid) -> Self {
-        Entity::Asteroid(asteroid)
-    }
-}
-
-impl From<Bullet> for Entity {
-    fn from(bullet: Bullet) -> Self {
-        Entity::Bullet(bullet)
-    }
-}
 
 pub struct UpdateContext<'a, T> {
     delta: f32,
@@ -508,9 +287,12 @@ impl<T> Entities<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::dispatch::{Dispatcher, Event};
+    use crate::{
+        dispatch::{Dispatcher, Event},
+        entity::Spacecraft,
+    };
 
-    use super::{Entities, Entity, Spacecraft, UpdateContext};
+    use super::{Entities, Entity, UpdateContext};
 
     #[test]
     fn entities_test() {

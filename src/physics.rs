@@ -7,9 +7,10 @@ use glam::Vec2;
 
 use crate::{
     dispatch::{Dispatcher, Event, Sender},
+    entity::Entity,
     game::{
         Game, State,
-        entities::{self, ASTEROID_SEGMENTS, Entities, Entity, EntityId},
+        entities::{self, ASTEROID_SEGMENTS, Entities, EntityId},
     },
     physics,
     worker::Worker,
@@ -111,30 +112,30 @@ impl Physics {
                         .entities
                         .visit(*entity_id, |entity| match entity {
                             Entity::Spacecraft(spacecraft) => Some(ColliderGroup {
-                                position: spacecraft.position,
-                                rotation: spacecraft.rotation,
+                                position: spacecraft.transform.position,
+                                rotation: spacecraft.transform.rotation,
                                 radius: DEFAULT_RADIUS,
                                 colliders: SPACECRAFT_COLLIDERS.into_iter().copied().collect(),
                             }),
 
                             Entity::Asteroid(asteroid) => Some(ColliderGroup {
-                                position: asteroid.position,
-                                rotation: asteroid.rotation,
-                                radius: asteroid.base_size + ASTEROID_ADDITIONAL_RADIUS,
+                                position: asteroid.transform.position,
+                                rotation: asteroid.transform.rotation,
+                                radius: asteroid.asteroid.size + ASTEROID_ADDITIONAL_RADIUS,
                                 colliders: (0..ASTEROID_SEGMENTS)
                                     .into_iter()
                                     .map(|index| {
                                         [
                                             Vec2::ZERO,
-                                            asteroid.body[index],
-                                            asteroid.body[(index + 1) % ASTEROID_SEGMENTS],
+                                            asteroid.asteroid.body[index],
+                                            asteroid.asteroid.body[(index + 1) % ASTEROID_SEGMENTS],
                                         ]
                                     })
                                     .collect(),
                             }),
 
                             Entity::Bullet(bullet) => Some(ColliderGroup {
-                                position: bullet.position,
+                                position: bullet.transform.position,
                                 rotation: 0.0,
                                 radius: DEFAULT_RADIUS,
                                 colliders: BULLET_COLLIDERS.into_iter().copied().collect(),
@@ -176,9 +177,13 @@ impl Physics {
 
         for (entity_id, group) in groups.iter_mut() {
             let position_rotation = self.entities.visit(*entity_id, |entity| match entity {
-                Entity::Spacecraft(spacecraft) => (spacecraft.position, spacecraft.rotation),
-                Entity::Asteroid(asteroid) => (asteroid.position, asteroid.rotation),
-                Entity::Bullet(bullet) => (bullet.position, 0.0),
+                Entity::Spacecraft(spacecraft) => {
+                    (spacecraft.transform.position, spacecraft.transform.rotation)
+                }
+                Entity::Asteroid(asteroid) => {
+                    (asteroid.transform.position, asteroid.transform.rotation)
+                }
+                Entity::Bullet(bullet) => (bullet.transform.position, 0.0),
 
                 _ => unreachable!("entity is not supported for collision detection"),
             });

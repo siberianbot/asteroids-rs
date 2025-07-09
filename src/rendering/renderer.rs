@@ -23,6 +23,7 @@ use vulkano::{
 
 use crate::{
     dispatch::{Dispatcher, Event},
+    entity,
     game::{
         Game,
         entities::{
@@ -138,15 +139,16 @@ impl Inner {
 
             let camera_matrix = entities
                 .visit(self.game.state().camera_id, |entity| {
-                    let camera = entity.to_camera();
+                    let transform = entity.transform();
+                    let camera = entity.camera().unwrap();
 
                     let mut projection =
                         Mat4::perspective_infinite_lh(PI / 2.0, frame.aspect(), 0.001);
                     projection.col_mut(1)[1] *= -1.0;
 
                     let view = Mat4::look_at_lh(
-                        Vec3::new(camera.position.x, camera.position.y, camera.distance),
-                        Vec3::new(camera.position.x, camera.position.y, 0.0),
+                        Vec3::new(transform.position.x, transform.position.y, camera.distance),
+                        Vec3::new(transform.position.x, transform.position.y, 0.0),
                         Vec3::new(0.0, 1.0, 0.0),
                     );
 
@@ -156,7 +158,7 @@ impl Inner {
 
             entities
                 .iter()
-                .filter(|(_, entity)| !matches!(entity, entities::Entity::Camera(_)))
+                .filter(|(_, entity)| !matches!(entity, entity::Entity::Camera(_)))
                 .for_each(|(entity_id, entity)| {
                     let render_data = render_data.entry(entity_id).or_insert_with(|| {
                         self.create_render_data(entity)
@@ -167,27 +169,39 @@ impl Inner {
                         let mut entity_buffer = render_data.entity_buffer.write().unwrap();
 
                         let model = match entity {
-                            entities::Entity::Spacecraft(spacecraft) => {
+                            entity::Entity::Spacecraft(spacecraft) => {
                                 Mat4::from_scale_rotation_translation(
                                     Vec3::ONE,
-                                    Quat::from_rotation_z(-spacecraft.rotation),
-                                    Vec3::new(spacecraft.position.x, spacecraft.position.y, 0.0),
+                                    Quat::from_rotation_z(-spacecraft.transform.rotation),
+                                    Vec3::new(
+                                        spacecraft.transform.position.x,
+                                        spacecraft.transform.position.y,
+                                        0.0,
+                                    ),
                                 )
                             }
 
-                            entities::Entity::Asteroid(asteroid) => {
+                            entity::Entity::Asteroid(asteroid) => {
                                 Mat4::from_scale_rotation_translation(
                                     Vec3::ONE,
-                                    Quat::from_rotation_z(-asteroid.rotation),
-                                    Vec3::new(asteroid.position.x, asteroid.position.y, 0.0),
+                                    Quat::from_rotation_z(-asteroid.transform.rotation),
+                                    Vec3::new(
+                                        asteroid.transform.position.x,
+                                        asteroid.transform.position.y,
+                                        0.0,
+                                    ),
                                 )
                             }
 
-                            entities::Entity::Bullet(bullet) => {
+                            entity::Entity::Bullet(bullet) => {
                                 Mat4::from_scale_rotation_translation(
                                     Vec3::ONE,
                                     Quat::default(),
-                                    Vec3::new(bullet.position.x, bullet.position.y, 0.0),
+                                    Vec3::new(
+                                        bullet.transform.position.x,
+                                        bullet.transform.position.y,
+                                        0.0,
+                                    ),
                                 )
                             }
 
@@ -237,16 +251,16 @@ impl Inner {
         }
     }
 
-    fn create_render_data(&self, entity: &entities::Entity) -> Option<RenderData> {
+    fn create_render_data(&self, entity: &entity::Entity) -> Option<RenderData> {
         let entity_buffer: Subbuffer<Entity> =
             self.backend.create_buffer(BufferUsage::UNIFORM_BUFFER);
 
         let pipeline = match entity {
-            entities::Entity::Spacecraft(_) | entities::Entity::Asteroid(_) => {
+            entity::Entity::Spacecraft(_) | entity::Entity::Asteroid(_) => {
                 self.entity_pipeline.clone()
             }
 
-            entities::Entity::Bullet(_) => self.bullet_pipeline.clone(),
+            entity::Entity::Bullet(_) => self.bullet_pipeline.clone(),
 
             _ => return None,
         };
@@ -264,7 +278,7 @@ impl Inner {
         };
 
         let render_data = match entity {
-            entities::Entity::Spacecraft(_) => {
+            entity::Entity::Spacecraft(_) => {
                 {
                     entity_buffer.write().unwrap().color = Vec3::new(0.1, 0.8, 0.1);
                 }
@@ -278,13 +292,13 @@ impl Inner {
                 }
             }
 
-            entities::Entity::Asteroid(asteroid) => {
+            entity::Entity::Asteroid(asteroid) => {
                 {
                     entity_buffer.write().unwrap().color = Vec3::new(0.6, 0.6, 0.6);
                 }
 
                 let vertices = once(Vec2::ZERO)
-                    .chain(asteroid.body.into_iter())
+                    .chain(asteroid.asteroid.body.into_iter())
                     .map(|position| Vertex { position })
                     .collect::<Vec<_>>();
 
@@ -299,7 +313,7 @@ impl Inner {
                 }
             }
 
-            entities::Entity::Bullet(_) => {
+            entity::Entity::Bullet(_) => {
                 {
                     entity_buffer.write().unwrap().color = Vec3::new(1.0, 1.0, 1.0);
                 }
