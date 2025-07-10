@@ -1,4 +1,7 @@
-use std::sync::{Arc, atomic::Ordering};
+use std::{
+    ops::{Div, Mul},
+    sync::{Arc, atomic::Ordering},
+};
 
 use winit::{
     application::ApplicationHandler,
@@ -10,8 +13,11 @@ use winit::{
 
 use crate::{
     dispatch::{Command, Dispatcher, Event, Sender},
-    game::Game,
-    input::InputController,
+    game::{
+        Game,
+        entities::{CAMERA_DISTANCE_MULTIPLIER, CAMERA_MAX_DISTANCE, CAMERA_MIN_DISTANCE},
+    },
+    input::{self, Key},
     physics::{self, Physics},
     rendering::{backend::Backend, renderer::Renderer},
     worker::Worker,
@@ -25,7 +31,7 @@ enum AppEvent {
 struct Inner {
     command_sender: Sender<Command>,
     event_sender: Sender<Event>,
-    input_controller: InputController,
+    input_manager: input::Manager,
     window: Arc<Window>,
     backend: Arc<Backend>,
     _renderer: Renderer,
@@ -41,12 +47,12 @@ impl Inner {
         let window = Inner::init_window(event_loop);
 
         let backend = Backend::new(event_dispatcher, event_loop, window.clone());
-        let renderer = Renderer::new(event_dispatcher, game, backend.clone());
+        let renderer = Renderer::new(event_dispatcher, game.clone(), backend.clone());
 
         let inner = Inner {
             command_sender: command_dispatcher.create_sender(),
             event_sender: event_dispatcher.create_sender(),
-            input_controller: InputController::new(command_dispatcher),
+            input_manager: Self::init_input(command_dispatcher.create_sender(), game.clone()),
             window,
             backend,
             _renderer: renderer,
@@ -67,6 +73,69 @@ impl Inner {
         Arc::new(window)
     }
 
+    fn init_input(command_sender: Sender<Command>, game: Arc<Game>) -> input::Manager {
+        let manager = input::Manager::default();
+
+        manager.set_key_map(input::Key::KbdEscape, "exit");
+        manager.set_key_map(input::Key::KbdF, "camera_follow");
+        manager.set_key_map(input::Key::KbdQ, "camera_zoom_out");
+        manager.set_key_map(input::Key::KbdE, "camera_zoom_in");
+
+        manager.set_action("exit", move |_| {
+            command_sender.send(Command::Exit);
+        });
+
+        manager.set_action("camera_follow", {
+            let game = game.clone();
+
+            move |_| {
+                game.entities()
+                    .visit_mut(game.state().camera_id, |entity| {
+                        let camera = entity.camera_mut().unwrap();
+
+                        camera.follow = !camera.follow;
+                    })
+                    .expect("there is not camera entity");
+            }
+        });
+
+        manager.set_action("camera_zoom_in", {
+            let game = game.clone();
+
+            move |_| {
+                game.entities()
+                    .visit_mut(game.state().camera_id, |entity| {
+                        let camera = entity.camera_mut().unwrap();
+
+                        camera.distance = camera
+                            .distance
+                            .div(CAMERA_DISTANCE_MULTIPLIER)
+                            .clamp(CAMERA_MIN_DISTANCE, CAMERA_MAX_DISTANCE);
+                    })
+                    .expect("there is not camera entity");
+            }
+        });
+
+        manager.set_action("camera_zoom_out", {
+            let game = game.clone();
+
+            move |_| {
+                game.entities()
+                    .visit_mut(game.state().camera_id, |entity| {
+                        let camera = entity.camera_mut().unwrap();
+
+                        camera.distance = camera
+                            .distance
+                            .mul(CAMERA_DISTANCE_MULTIPLIER)
+                            .clamp(CAMERA_MIN_DISTANCE, CAMERA_MAX_DISTANCE);
+                    })
+                    .expect("there is not camera entity");
+            }
+        });
+
+        manager
+    }
+
     fn dispatch_window_event(&mut self, _: &ActiveEventLoop, event: WindowEvent) {
         match event {
             WindowEvent::Resized(size) => {
@@ -82,7 +151,8 @@ impl Inner {
             }
 
             WindowEvent::KeyboardInput { event, .. } => {
-                self.input_controller.dispatch(event);
+                self.input_manager.dispatch_key_event(event);
+                self.input_manager.dispatch();
             }
 
             _ => {}

@@ -83,12 +83,6 @@ impl<T> Dispatcher<T> {
 #[non_exhaustive]
 pub enum Command {
     Exit,
-    PlayerActionDown(PlayerAction),
-    PlayerActionUp(PlayerAction),
-    PlayerFire,
-    ToggleCameraFollow,
-    CameraZoomOut,
-    CameraZoomIn,
 }
 
 #[derive(Clone, Debug, PartialEq)]

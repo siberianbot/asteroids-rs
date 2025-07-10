@@ -217,38 +217,38 @@ impl Game {
 
             //     self.entities.create(bullet);
             // }
-            Command::ToggleCameraFollow => self
-                .entities
-                .visit_mut(self.state.camera_id, |entity| {
-                    let camera = entity.camera_mut().unwrap();
+            // Command::ToggleCameraFollow => self
+            //     .entities
+            //     .visit_mut(self.state.camera_id, |entity| {
+            //         let camera = entity.camera_mut().unwrap();
 
-                    camera.follow = !camera.follow;
-                })
-                .expect("there is not camera entity"),
+            //         camera.follow = !camera.follow;
+            //     })
+            //     .expect("there is not camera entity"),
 
-            Command::CameraZoomIn => self
-                .entities
-                .visit_mut(self.state.camera_id, |entity| {
-                    let camera = entity.camera_mut().unwrap();
+            // Command::CameraZoomIn => self
+            //     .entities
+            //     .visit_mut(self.state.camera_id, |entity| {
+            //         let camera = entity.camera_mut().unwrap();
 
-                    camera.distance = camera
-                        .distance
-                        .div(CAMERA_DISTANCE_MULTIPLIER)
-                        .clamp(CAMERA_MIN_DISTANCE, CAMERA_MAX_DISTANCE);
-                })
-                .expect("there is not camera entity"),
+            //         camera.distance = camera
+            //             .distance
+            //             .div(CAMERA_DISTANCE_MULTIPLIER)
+            //             .clamp(CAMERA_MIN_DISTANCE, CAMERA_MAX_DISTANCE);
+            //     })
+            //     .expect("there is not camera entity"),
 
-            Command::CameraZoomOut => self
-                .entities
-                .visit_mut(self.state.camera_id, |entity| {
-                    let camera = entity.camera_mut().unwrap();
+            // Command::CameraZoomOut => self
+            //     .entities
+            //     .visit_mut(self.state.camera_id, |entity| {
+            //         let camera = entity.camera_mut().unwrap();
 
-                    camera.distance = camera
-                        .distance
-                        .mul(CAMERA_DISTANCE_MULTIPLIER)
-                        .clamp(CAMERA_MIN_DISTANCE, CAMERA_MAX_DISTANCE);
-                })
-                .expect("there is not camera entity"),
+            //         camera.distance = camera
+            //             .distance
+            //             .mul(CAMERA_DISTANCE_MULTIPLIER)
+            //             .clamp(CAMERA_MIN_DISTANCE, CAMERA_MAX_DISTANCE);
+            //     })
+            //     .expect("there is not camera entity"),
 
             _ => {}
         }
