@@ -7,16 +7,16 @@ use std::{
     time::{Duration, Instant},
 };
 
-use entities::{Entities, UpdateContext};
 use glam::Vec2;
 
 use crate::{
     dispatch::{Command, Dispatcher, Event, Sender},
-    entity::{Asteroid, Camera, CameraComponent, Entity, Spacecraft, TransformComponent},
+    ecs::{self, ECS, StatelessSystem},
+    entity::{Asteroid, Camera, CameraComponent, Entity, EntityId, Spacecraft, TransformComponent},
     game::entities::{
-        CAMERA_DISTANCE_MULTIPLIER, CAMERA_MAX_DISTANCE, CAMERA_MIN_DISTANCE, EntityId,
-        PlayerAction,
+        CAMERA_DISTANCE_MULTIPLIER, CAMERA_MAX_DISTANCE, CAMERA_MIN_DISTANCE, PlayerAction,
     },
+    systems,
     worker::Worker,
 };
 
@@ -39,7 +39,8 @@ struct AsteroidRespawnState {
 }
 
 pub struct Game {
-    entities: Arc<Entities<State>>,
+    ecs: Arc<ECS>,
+    _ecs_worker: Worker,
     state: State,
     asteroid_respawn_state: Mutex<AsteroidRespawnState>,
 }
@@ -49,20 +50,25 @@ impl Game {
         command_dispatcher: &Dispatcher<Command>,
         event_dispatcher: &Dispatcher<Event>,
     ) -> (Arc<Game>, Worker) {
-        let entities = Entities::new(
-            event_dispatcher,
-            [
-                Self::camera_sync,
-                Self::camera_zoom,
-                Self::entities_movement,
-                Self::spacecraft_action_handle,
-                Self::spacecraft_fire_cooldown,
-                Self::entities_despawn,
-            ],
+        let ecs = ECS::new(event_dispatcher);
+
+        ecs.add_system(
+            "camera_sync_system",
+            Into::<StatelessSystem>::into(systems::camera_sync_system),
         );
 
-        let spacecraft_entity_id = entities.create(Spacecraft::default());
-        let camera_entity_id = entities.create(Camera {
+        ecs.add_system(
+            "movement_system",
+            Into::<StatelessSystem>::into(systems::movement_system),
+        );
+
+        ecs.add_system(
+            "spacecraft_cooldown_system",
+            Into::<StatelessSystem>::into(systems::spacecraft_cooldown_system),
+        );
+
+        let spacecraft_entity_id = ecs.create_entity(Spacecraft::default());
+        let camera_entity_id = ecs.create_entity(Camera {
             camera: CameraComponent {
                 target: Some(spacecraft_entity_id),
                 ..Default::default()
@@ -71,7 +77,8 @@ impl Game {
         });
 
         let game = Game {
-            entities,
+            _ecs_worker: ecs::spawn_worker(ecs.clone()),
+            ecs,
             state: State {
                 spacecraft_id: spacecraft_entity_id,
                 camera_id: camera_entity_id,
@@ -123,8 +130,8 @@ impl Game {
         (game.clone(), worker)
     }
 
-    pub fn entities(&self) -> Arc<Entities<State>> {
-        self.entities.clone()
+    pub fn ecs(&self) -> Arc<ECS> {
+        self.ecs.clone()
     }
 
     pub fn state(&self) -> &State {
@@ -132,8 +139,6 @@ impl Game {
     }
 
     fn update(&self, delta: f32) {
-        self.entities.update(delta, &self.state);
-
         self.respawn_asteroids(delta);
     }
 
@@ -147,8 +152,8 @@ impl Game {
         }
 
         let count = self
-            .entities
-            .iter()
+            .ecs
+            .iter_entities()
             .filter_map(|(_, entity)| entity.asteroid())
             .count();
 
@@ -160,8 +165,8 @@ impl Game {
         let rotation = rand::random_range(0.0..=2.0 * PI);
 
         let position = self
-            .entities
-            .visit(self.state.spacecraft_id, |entity| {
+            .ecs
+            .visit_entity(self.state.spacecraft_id, |entity| {
                 entity.transform().position + distance * Vec2::ONE.rotate(rotation.sin_cos().into())
             })
             .expect("there is no player entity");
@@ -174,7 +179,7 @@ impl Game {
             ..Asteroid::default()
         };
 
-        self.entities.create(asteroid);
+        self.ecs.create_entity(asteroid);
 
         state.timer = 1.0;
     }
@@ -249,7 +254,6 @@ impl Game {
             //             .clamp(CAMERA_MIN_DISTANCE, CAMERA_MAX_DISTANCE);
             //     })
             //     .expect("there is not camera entity"),
-
             _ => {}
         }
     }
@@ -266,8 +270,8 @@ impl Game {
                 let colliders = collision
                     .iter()
                     .filter_map(|entity_id| {
-                        self.entities
-                            .visit(*entity_id, |entity| match entity {
+                        self.ecs
+                            .visit_entity(*entity_id, |entity| match entity {
                                 Entity::Asteroid(_) => Some(Collider::Asteroid),
                                 Entity::Bullet(_) => Some(Collider::Bullet),
                                 _ => None,
@@ -279,7 +283,7 @@ impl Game {
                 if colliders.contains(&Collider::Asteroid) && colliders.contains(&Collider::Bullet)
                 {
                     for entity_id in collision {
-                        self.entities.destroy(*entity_id);
+                        self.ecs.destroy_entity(*entity_id);
                     }
                 }
             }
@@ -288,184 +292,26 @@ impl Game {
         }
     }
 
-    fn camera_sync(context: UpdateContext<State>) {
-        let position = context
-            .current_entity()
-            .camera()
-            .filter(|camera| camera.follow)
-            .and_then(|camera| {
-                context
-                    .get_entity(camera.target.unwrap())
-                    .and_then(|target| match target {
-                        Entity::Spacecraft(spacecraft) => Some(spacecraft.transform.position),
-                        Entity::Asteroid(asteroid) => Some(asteroid.transform.position),
+    // fn entities_despawn(context: UpdateContext<State>) {
+    //     let player_position = context
+    //         .get_entity(context.data().spacecraft_id)
+    //         .map(|spacecraft| spacecraft.transform().position)
+    //         .expect("there is no player entity");
 
-                        _ => None,
-                    })
-            });
+    //     let entity_position = match context.current_entity() {
+    //         Entity::Spacecraft(spacecraft) => Some(spacecraft.transform.position),
+    //         Entity::Asteroid(asteroid) => Some(asteroid.transform.position),
+    //         Entity::Bullet(bullet) => Some(bullet.transform.position),
 
-        if let Some(position) = position {
-            context.modify(|entity| {
-                entity.transform_mut().position = position;
-            });
-        }
-    }
+    //         _ => None,
+    //     };
 
-    fn camera_zoom(context: UpdateContext<State>) {
-        const ZOOM_EPSILON: f32 = 0.1;
-        const ZOOM_SPEED: f32 = 2.0;
+    //     if let Some(asteroid_position) = entity_position {
+    //         let distance = player_position.distance(asteroid_position);
 
-        let distance = context
-            .current_entity()
-            .camera()
-            .map(|camera| camera.distance);
-
-        if let Some(distance) = distance {
-            context.modify(|entity| {
-                entity.camera_mut().unwrap().distance = distance;
-            });
-        }
-    }
-
-    fn entities_movement(context: UpdateContext<State>) {
-        const BREAKING_MULTIPLIER: f32 = 0.5;
-        const BREAKING_EPSILON: f32 = 0.01;
-
-        match context.current_entity() {
-            Entity::Asteroid(asteroid) => {
-                let position =
-                    asteroid.transform.position + context.delta() * asteroid.movement.velocity;
-                let rotation = asteroid.transform.rotation
-                    + context.delta() * asteroid.asteroid.rotation_velocity;
-
-                context.modify(|entity| {
-                    let asteroid = entity.transform_mut();
-
-                    asteroid.position = position;
-                    asteroid.rotation = rotation;
-                });
-            }
-
-            Entity::Spacecraft(spacecraft) => {
-                let acceleration = if spacecraft.movement.acceleration.length() < BREAKING_EPSILON {
-                    -1.0 * spacecraft.movement.velocity * BREAKING_MULTIPLIER
-                } else {
-                    spacecraft.movement.acceleration
-                };
-
-                let velocity = spacecraft.movement.velocity + context.delta() * acceleration;
-                let position =
-                    spacecraft.transform.position + context.delta() * spacecraft.movement.velocity;
-
-                context.modify(|entity| {
-                    entity.movement_mut().unwrap().velocity = velocity;
-                    entity.transform_mut().position = position;
-                });
-            }
-
-            Entity::Bullet(bullet) => {
-                let position =
-                    bullet.transform.position + context.delta() * bullet.movement.velocity;
-
-                context.modify(|entity| {
-                    let bullet = entity.transform_mut();
-
-                    bullet.position = position;
-                });
-            }
-
-            _ => {}
-        }
-    }
-
-    fn spacecraft_action_handle(context: UpdateContext<State>) {
-        const VEC: Vec2 = Vec2::new(1.0, 0.0);
-        const ACCELERATION: f32 = 2.0;
-        const DECELERATION: f32 = -1.0;
-        const ROTATION_VELOCITY: f32 = PI;
-
-        struct Changes {
-            acceleration: Vec2,
-            rotation: f32,
-        }
-
-        // let changes = context.current_entity().as_spacecraft().map(|spacecraft| {
-        //     let mut changes = Changes {
-        //         acceleration: Vec2::ZERO,
-        //         rotation: spacecraft.rotation,
-        //     };
-
-        //     let acceleration_vec = VEC.rotate(spacecraft.rotation.sin_cos().into());
-
-        //     if spacecraft.action.contains(PlayerAction::ACCELERATE) {
-        //         changes.acceleration += ACCELERATION * acceleration_vec;
-        //     }
-
-        //     if spacecraft.action.contains(PlayerAction::DECELERATE) {
-        //         changes.acceleration += DECELERATION * acceleration_vec;
-        //     }
-
-        //     if spacecraft.action.contains(PlayerAction::INCLINE_LEFT) {
-        //         changes.rotation += context.delta() * ROTATION_VELOCITY;
-        //     }
-
-        //     if spacecraft.action.contains(PlayerAction::INCLINE_RIGHT) {
-        //         changes.rotation -= context.delta() * ROTATION_VELOCITY;
-        //     }
-
-        //     if spacecraft.action.contains(PlayerAction::FIRE) && spacecraft.fire_cooldown == 0.0 {
-        //         context.data().command_sender.send(Command::PlayerFire);
-        //     }
-
-        //     // TODO: map rotation to [0; 2pi]
-
-        //     changes
-        // });
-
-        // if let Some(changes) = changes {
-        //     context.modify(|entity| {
-        //         let spacecraft = entity.to_spacecraft_mut();
-
-        //         spacecraft.acceleration = changes.acceleration;
-        //         spacecraft.rotation = changes.rotation;
-        //     });
-        // }
-    }
-
-    fn spacecraft_fire_cooldown(context: UpdateContext<State>) {
-        let fire_cooldown = context.current_entity().spacecraft().map(|spacecraft| {
-            if spacecraft.cooldown <= 0.0 {
-                0.0
-            } else {
-                spacecraft.cooldown - context.delta()
-            }
-        });
-
-        if let Some(fire_cooldown) = fire_cooldown {
-            context.modify(move |entity| entity.spacecraft_mut().unwrap().cooldown = fire_cooldown);
-        }
-    }
-
-    fn entities_despawn(context: UpdateContext<State>) {
-        let player_position = context
-            .get_entity(context.data().spacecraft_id)
-            .map(|spacecraft| spacecraft.transform().position)
-            .expect("there is no player entity");
-
-        let entity_position = match context.current_entity() {
-            Entity::Spacecraft(spacecraft) => Some(spacecraft.transform.position),
-            Entity::Asteroid(asteroid) => Some(asteroid.transform.position),
-            Entity::Bullet(bullet) => Some(bullet.transform.position),
-
-            _ => None,
-        };
-
-        if let Some(asteroid_position) = entity_position {
-            let distance = player_position.distance(asteroid_position);
-
-            if distance >= MAX_DISTANCE {
-                context.destroy();
-            }
-        }
-    }
+    //         if distance >= MAX_DISTANCE {
+    //             context.destroy();
+    //         }
+    //     }
+    // }
 }

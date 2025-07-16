@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, Mutex, mpsc},
 };
 
-use crate::game::entities::{EntityId, PlayerAction};
+use crate::entity::EntityId;
 
 #[derive(Clone)]
 pub struct Sender<T> {

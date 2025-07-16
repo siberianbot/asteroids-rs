@@ -7,11 +7,9 @@ use glam::Vec2;
 
 use crate::{
     dispatch::{Dispatcher, Event, Sender},
-    entity::Entity,
-    game::{
-        Game, State,
-        entities::{self, ASTEROID_SEGMENTS, Entities, EntityId},
-    },
+    ecs::ECS,
+    entity::{Entity, EntityId},
+    game::{Game, State, entities::ASTEROID_SEGMENTS},
     physics,
     worker::Worker,
 };
@@ -87,7 +85,7 @@ type Collision = BTreeSet<EntityId>;
 
 pub struct Physics {
     event_sender: Sender<Event>,
-    entities: Arc<Entities<State>>,
+    entities: Arc<ECS>,
     colliders: Mutex<BTreeMap<EntityId, ColliderGroup>>,
     collisions: Mutex<BTreeSet<Collision>>,
 }
@@ -96,7 +94,7 @@ impl Physics {
     pub fn new(event_dispatcher: &Dispatcher<Event>, game: &Game) -> Worker {
         let physics = Physics {
             event_sender: event_dispatcher.create_sender(),
-            entities: game.entities(),
+            entities: game.ecs(),
             colliders: Default::default(),
             collisions: Default::default(),
         };
@@ -110,7 +108,7 @@ impl Physics {
                 Event::EntityCreated(entity_id) => {
                     let group = physics
                         .entities
-                        .visit(*entity_id, |entity| match entity {
+                        .visit_entity(*entity_id, |entity| match entity {
                             Entity::Spacecraft(spacecraft) => Some(ColliderGroup {
                                 position: spacecraft.transform.position,
                                 rotation: spacecraft.transform.rotation,
@@ -176,17 +174,19 @@ impl Physics {
         let mut groups = self.colliders.lock().unwrap();
 
         for (entity_id, group) in groups.iter_mut() {
-            let position_rotation = self.entities.visit(*entity_id, |entity| match entity {
-                Entity::Spacecraft(spacecraft) => {
-                    (spacecraft.transform.position, spacecraft.transform.rotation)
-                }
-                Entity::Asteroid(asteroid) => {
-                    (asteroid.transform.position, asteroid.transform.rotation)
-                }
-                Entity::Bullet(bullet) => (bullet.transform.position, 0.0),
+            let position_rotation = self
+                .entities
+                .visit_entity(*entity_id, |entity| match entity {
+                    Entity::Spacecraft(spacecraft) => {
+                        (spacecraft.transform.position, spacecraft.transform.rotation)
+                    }
+                    Entity::Asteroid(asteroid) => {
+                        (asteroid.transform.position, asteroid.transform.rotation)
+                    }
+                    Entity::Bullet(bullet) => (bullet.transform.position, 0.0),
 
-                _ => unreachable!("entity is not supported for collision detection"),
-            });
+                    _ => unreachable!("entity is not supported for collision detection"),
+                });
 
             if let Some((position, rotation)) = position_rotation {
                 group.position = position;

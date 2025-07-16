@@ -23,11 +23,11 @@ use vulkano::{
 
 use crate::{
     dispatch::{Dispatcher, Event},
-    entity,
+    entity::{self, EntityId},
     game::{
         Game,
         entities::{
-            self, ASTEROID_INDICES, BULLET_INDICES, BULLET_VERTICES, EntityId, SPACECRAFT_INDICES,
+            self, ASTEROID_INDICES, BULLET_INDICES, BULLET_VERTICES, SPACECRAFT_INDICES,
             SPACECRAFT_VERTICES,
         },
     },
@@ -134,11 +134,11 @@ impl Inner {
                 )
                 .expect("failed to set viewport");
 
-            let entities = self.game.entities();
+            let entities = self.game.ecs();
             let mut render_data = self.render_data.lock().unwrap();
 
             let camera_matrix = entities
-                .visit(self.game.state().camera_id, |entity| {
+                .visit_entity(self.game.state().camera_id, |entity| {
                     let transform = entity.transform();
                     let camera = entity.camera().unwrap();
 
@@ -157,7 +157,7 @@ impl Inner {
                 .expect("there is not camera entity");
 
             entities
-                .iter()
+                .iter_entities()
                 .filter(|(_, entity)| !matches!(entity, entity::Entity::Camera(_)))
                 .for_each(|(entity_id, entity)| {
                     let render_data = render_data.entry(entity_id).or_insert_with(|| {
@@ -334,10 +334,10 @@ impl Inner {
     }
 
     fn dispatch_entity_created(&self, entity_id: EntityId) {
-        let entities = self.game.entities();
+        let entities = self.game.ecs();
 
         let data = entities
-            .visit(entity_id, |entity| self.create_render_data(entity))
+            .visit_entity(entity_id, |entity| self.create_render_data(entity))
             .flatten();
 
         if let Some(data) = data {

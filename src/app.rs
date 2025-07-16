@@ -89,8 +89,8 @@ impl Inner {
             let game = game.clone();
 
             move |_| {
-                game.entities()
-                    .visit_mut(game.state().camera_id, |entity| {
+                game.ecs()
+                    .visit_entity_mut(game.state().camera_id, |entity| {
                         let camera = entity.camera_mut().unwrap();
 
                         camera.follow = !camera.follow;
@@ -103,8 +103,8 @@ impl Inner {
             let game = game.clone();
 
             move |_| {
-                game.entities()
-                    .visit_mut(game.state().camera_id, |entity| {
+                game.ecs()
+                    .visit_entity_mut(game.state().camera_id, |entity| {
                         let camera = entity.camera_mut().unwrap();
 
                         camera.distance = camera
@@ -120,8 +120,8 @@ impl Inner {
             let game = game.clone();
 
             move |_| {
-                game.entities()
-                    .visit_mut(game.state().camera_id, |entity| {
+                game.ecs()
+                    .visit_entity_mut(game.state().camera_id, |entity| {
                         let camera = entity.camera_mut().unwrap();
 
                         camera.distance = camera
