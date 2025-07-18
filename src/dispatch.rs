@@ -91,8 +91,7 @@ pub enum Event {
     WindowResized([u32; 2]),
     EntityCreated(EntityId),
     EntityDestroyed(EntityId),
-    CollisionStarted(BTreeSet<EntityId>),
-    CollisionFinished(BTreeSet<EntityId>),
+    CollisionOccurred([EntityId; 2]),
 }
 
 #[cfg(test)]

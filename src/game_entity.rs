@@ -2,51 +2,10 @@ use std::{f32::consts::PI, ops::RangeInclusive};
 
 use glam::Vec2;
 
-/// TODO: it is part of physics mod
-/// Point collider data
-pub struct PointCollider {
-    /// Center of the point collider
-    pub center: Vec2,
-    /// Radius of the collider (also used as activation radius)
-    pub radius: f32,
-}
-
-/// TODO: it is part of physics mod
-/// Triangle collider data
-pub struct TriangleCollider {
-    /// Vertices of triangle
-    pub vertices: [Vec2; 3],
-    /// Activation radius
-    pub radius: f32,
-}
-
-/// TODO: it is part of physics mod
-/// Collider
-///
-/// See next structures for specific details:
-/// * [PointCollider]
-/// * [TriangleCollider]
-pub enum Collider {
-    /// Variant with [PointCollider] data
-    Point(PointCollider),
-    /// Variant with [TriangleCollider] data
-    Triangle(TriangleCollider),
-}
+use crate::game_physics::{Collider, TriangleCollider};
 
 /// Identifier of entity
 pub type EntityId = usize;
-
-impl From<PointCollider> for Collider {
-    fn from(value: PointCollider) -> Self {
-        Collider::Point(value)
-    }
-}
-
-impl From<TriangleCollider> for Collider {
-    fn from(value: TriangleCollider) -> Self {
-        Collider::Triangle(value)
-    }
-}
 
 /// Transformation of an entity
 #[derive(Default)]
@@ -240,6 +199,7 @@ impl Asteroid {
                     let next_segment_index = (segment_index + 1) % consts::ASTEROID_SEGMENTS_COUNT;
 
                     TriangleCollider {
+                        center: Vec2::ZERO,
                         vertices: [
                             Vec2::ZERO,
                             asteroid.body[segment_index],
@@ -455,13 +415,14 @@ impl From<Bullet> for Entity {
 pub mod consts {
     use glam::Vec2;
 
-    use crate::game_entity::{Collider, PointCollider, TriangleCollider};
+    use crate::game_physics::{Collider, PointCollider, TriangleCollider};
 
     /// Initial distance from object to camera center
     pub const CAMERA_INITIAL_DISTANCE: f32 = 4.0;
 
     /// Default collider of spacecraft
     pub const SPACECRAFT_COLLIDER: Collider = Collider::Triangle(TriangleCollider {
+        center: Vec2::ZERO,
         vertices: [
             Vec2::new(0.0, 0.5),
             Vec2::new(0.35355339, -0.35355339),

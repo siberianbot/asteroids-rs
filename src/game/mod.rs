@@ -21,6 +21,7 @@ use crate::{
     },
     game_logics::{AsteroidsRespawnGameLogicState, asteroids_respawn_game_logic},
     game_loop::{self, GameLoop, StatefulGameLogic},
+    game_physics::{self, Physics},
     game_systems,
     worker::Worker,
 };
@@ -37,6 +38,7 @@ pub struct Game {
     _ecs_worker: Worker,
     game_loop: Arc<GameLoop>,
     _game_loop_worker: Worker,
+    _physics_worker: Worker,
 
     camera_id: EntityId,
     game_players: Arc<GamePlayers>,
@@ -75,6 +77,8 @@ impl Game {
             ),
         );
 
+        let physics = Physics::new(event_dispatcher, ecs.clone());
+
         let spacecraft_entity_id = ecs.create_entity(Spacecraft::default());
         let camera_entity_id = ecs.create_entity(Camera {
             camera: CameraComponent {
@@ -93,6 +97,7 @@ impl Game {
             ecs,
             _game_loop_worker: game_loop::spawn_worker(game_loop.clone()),
             game_loop,
+            _physics_worker: game_physics::spawn_worker(physics),
 
             camera_id: camera_entity_id,
             game_players,
@@ -177,7 +182,7 @@ impl Game {
         }
 
         match event {
-            Event::CollisionStarted(collision) => {
+            Event::CollisionOccurred(collision) => {
                 let colliders = collision
                     .iter()
                     .filter_map(|entity_id| {

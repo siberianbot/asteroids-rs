@@ -17,8 +17,7 @@ use crate::{
         Game,
         entities::{CAMERA_DISTANCE_MULTIPLIER, CAMERA_MAX_DISTANCE, CAMERA_MIN_DISTANCE},
     },
-    input::{self, Key},
-    physics::{self, Physics},
+    input::{self},
     rendering::{backend::Backend, renderer::Renderer},
     worker::Worker,
 };
@@ -167,8 +166,6 @@ struct App {
 
     game: Arc<Game>,
 
-    _physics_worker: Worker,
-
     inner: Option<Inner>,
 }
 
@@ -186,7 +183,6 @@ impl App {
         });
 
         let game = Game::new(&command_dispatcher, &event_dispatcher);
-        let physics_worker = Physics::new(&event_dispatcher, &game);
 
         let dispatcher_worker = {
             let command_dispatcher = command_dispatcher.clone();
@@ -206,8 +202,6 @@ impl App {
             _dispatcher_worker: dispatcher_worker,
 
             game,
-
-            _physics_worker: physics_worker,
 
             inner: Default::default(),
         };
