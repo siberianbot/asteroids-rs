@@ -138,7 +138,7 @@ impl Inner {
             let mut render_data = self.render_data.lock().unwrap();
 
             let camera_matrix = entities
-                .visit_entity(self.game.state().camera_id, |entity| {
+                .visit_entity(self.game.camera_id(), |entity| {
                     let transform = entity.transform();
                     let camera = entity.camera().unwrap();
 

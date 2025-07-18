@@ -90,7 +90,7 @@ impl Inner {
 
             move |_| {
                 game.ecs()
-                    .visit_entity_mut(game.state().camera_id, |entity| {
+                    .visit_entity_mut(game.camera_id(), |entity| {
                         let camera = entity.camera_mut().unwrap();
 
                         camera.follow = !camera.follow;
@@ -104,7 +104,7 @@ impl Inner {
 
             move |_| {
                 game.ecs()
-                    .visit_entity_mut(game.state().camera_id, |entity| {
+                    .visit_entity_mut(game.camera_id(), |entity| {
                         let camera = entity.camera_mut().unwrap();
 
                         camera.distance = camera
@@ -121,7 +121,7 @@ impl Inner {
 
             move |_| {
                 game.ecs()
-                    .visit_entity_mut(game.state().camera_id, |entity| {
+                    .visit_entity_mut(game.camera_id(), |entity| {
                         let camera = entity.camera_mut().unwrap();
 
                         camera.distance = camera
@@ -166,7 +166,6 @@ struct App {
     _dispatcher_worker: Worker,
 
     game: Arc<Game>,
-    _game_worker: Worker,
 
     _physics_worker: Worker,
 
@@ -186,7 +185,7 @@ impl App {
             _ => {}
         });
 
-        let (game, game_worker) = Game::new(&command_dispatcher, &event_dispatcher);
+        let game = Game::new(&command_dispatcher, &event_dispatcher);
         let physics_worker = Physics::new(&event_dispatcher, &game);
 
         let dispatcher_worker = {
@@ -207,7 +206,6 @@ impl App {
             _dispatcher_worker: dispatcher_worker,
 
             game,
-            _game_worker: game_worker,
 
             _physics_worker: physics_worker,
 

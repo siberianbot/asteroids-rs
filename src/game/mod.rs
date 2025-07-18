@@ -16,6 +16,9 @@ use crate::{
     game::entities::{
         CAMERA_DISTANCE_MULTIPLIER, CAMERA_MAX_DISTANCE, CAMERA_MIN_DISTANCE, PlayerAction,
     },
+    game_common::{GamePlayer, GamePlayers},
+    game_logics::{AsteroidsRespawnGameLogicState, asteroids_respawn_game_logic},
+    game_loop::{self, GameLoop, StatefulGameLogic},
     systems,
     worker::Worker,
 };
@@ -27,29 +30,21 @@ const SAFE_DISTANCE: RangeInclusive<f32> = 15.0..=MAX_DISTANCE;
 const FIRE_COOLDOWN: f32 = 0.5;
 const BULLET_VELOCITY: f32 = 12.5;
 
-pub struct State {
-    pub spacecraft_id: EntityId,
-    pub camera_id: EntityId,
-
-    command_sender: Sender<Command>,
-}
-
-struct AsteroidRespawnState {
-    timer: f32,
-}
-
 pub struct Game {
     ecs: Arc<ECS>,
     _ecs_worker: Worker,
-    state: State,
-    asteroid_respawn_state: Mutex<AsteroidRespawnState>,
+    game_loop: Arc<GameLoop>,
+    _game_loop_worker: Worker,
+
+    camera_id: EntityId,
+    game_players: Arc<GamePlayers>,
 }
 
 impl Game {
     pub fn new(
         command_dispatcher: &Dispatcher<Command>,
         event_dispatcher: &Dispatcher<Event>,
-    ) -> (Arc<Game>, Worker) {
+    ) -> Arc<Game> {
         let ecs = ECS::new(event_dispatcher);
 
         ecs.add_system(
@@ -67,6 +62,17 @@ impl Game {
             Into::<StatelessSystem>::into(systems::spacecraft_cooldown_system),
         );
 
+        let game_loop: Arc<GameLoop> = Default::default();
+        let game_players: Arc<GamePlayers> = Default::default();
+
+        game_loop.add_logic(
+            "asteroids_respawn_game_logic",
+            StatefulGameLogic::new(
+                AsteroidsRespawnGameLogicState::new(ecs.clone(), game_players.clone()),
+                asteroids_respawn_game_logic,
+            ),
+        );
+
         let spacecraft_entity_id = ecs.create_entity(Spacecraft::default());
         let camera_entity_id = ecs.create_entity(Camera {
             camera: CameraComponent {
@@ -76,40 +82,21 @@ impl Game {
             ..Default::default()
         });
 
+        game_players.players.write().unwrap().push(GamePlayer {
+            spacecraft_id: spacecraft_entity_id,
+        });
+
         let game = Game {
             _ecs_worker: ecs::spawn_worker(ecs.clone()),
             ecs,
-            state: State {
-                spacecraft_id: spacecraft_entity_id,
-                camera_id: camera_entity_id,
-                command_sender: command_dispatcher.create_sender(),
-            },
-            asteroid_respawn_state: Mutex::new(AsteroidRespawnState { timer: 0.0 }),
+            _game_loop_worker: game_loop::spawn_worker(game_loop.clone()),
+            game_loop,
+
+            camera_id: camera_entity_id,
+            game_players,
         };
 
         let game = Arc::new(game);
-
-        let worker = {
-            let game = game.clone();
-
-            Worker::spawn("Game", move |alive| {
-                const RATE: f32 = 1.0 / 120.0;
-
-                let mut last_update = Instant::now();
-
-                while alive.load(Ordering::Relaxed) {
-                    let delta = Instant::now().duration_since(last_update).as_secs_f32();
-
-                    game.update(delta);
-
-                    last_update = Instant::now();
-
-                    if delta < RATE {
-                        thread::sleep(Duration::from_secs_f32(RATE - delta));
-                    }
-                }
-            })
-        };
 
         {
             let game = game.clone();
@@ -127,61 +114,15 @@ impl Game {
             });
         }
 
-        (game.clone(), worker)
+        game
     }
 
     pub fn ecs(&self) -> Arc<ECS> {
         self.ecs.clone()
     }
 
-    pub fn state(&self) -> &State {
-        &self.state
-    }
-
-    fn update(&self, delta: f32) {
-        self.respawn_asteroids(delta);
-    }
-
-    fn respawn_asteroids(&self, delta: f32) {
-        let mut state = self.asteroid_respawn_state.lock().unwrap();
-
-        state.timer -= delta;
-
-        if state.timer > 0.0 {
-            return;
-        }
-
-        let count = self
-            .ecs
-            .iter_entities()
-            .filter_map(|(_, entity)| entity.asteroid())
-            .count();
-
-        if count >= 16 {
-            return;
-        }
-
-        let distance = rand::random_range(SAFE_DISTANCE);
-        let rotation = rand::random_range(0.0..=2.0 * PI);
-
-        let position = self
-            .ecs
-            .visit_entity(self.state.spacecraft_id, |entity| {
-                entity.transform().position + distance * Vec2::ONE.rotate(rotation.sin_cos().into())
-            })
-            .expect("there is no player entity");
-
-        let asteroid = Asteroid {
-            transform: TransformComponent {
-                position,
-                ..Default::default()
-            },
-            ..Asteroid::default()
-        };
-
-        self.ecs.create_entity(asteroid);
-
-        state.timer = 1.0;
+    pub fn camera_id(&self) -> EntityId {
+        self.camera_id
     }
 
     fn handle_command(&self, command: &Command) {
@@ -222,38 +163,6 @@ impl Game {
 
             //     self.entities.create(bullet);
             // }
-            // Command::ToggleCameraFollow => self
-            //     .entities
-            //     .visit_mut(self.state.camera_id, |entity| {
-            //         let camera = entity.camera_mut().unwrap();
-
-            //         camera.follow = !camera.follow;
-            //     })
-            //     .expect("there is not camera entity"),
-
-            // Command::CameraZoomIn => self
-            //     .entities
-            //     .visit_mut(self.state.camera_id, |entity| {
-            //         let camera = entity.camera_mut().unwrap();
-
-            //         camera.distance = camera
-            //             .distance
-            //             .div(CAMERA_DISTANCE_MULTIPLIER)
-            //             .clamp(CAMERA_MIN_DISTANCE, CAMERA_MAX_DISTANCE);
-            //     })
-            //     .expect("there is not camera entity"),
-
-            // Command::CameraZoomOut => self
-            //     .entities
-            //     .visit_mut(self.state.camera_id, |entity| {
-            //         let camera = entity.camera_mut().unwrap();
-
-            //         camera.distance = camera
-            //             .distance
-            //             .mul(CAMERA_DISTANCE_MULTIPLIER)
-            //             .clamp(CAMERA_MIN_DISTANCE, CAMERA_MAX_DISTANCE);
-            //     })
-            //     .expect("there is not camera entity"),
             _ => {}
         }
     }

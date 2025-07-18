@@ -9,7 +9,7 @@ use crate::{
     dispatch::{Dispatcher, Event, Sender},
     ecs::ECS,
     entity::{Entity, EntityId},
-    game::{Game, State, entities::ASTEROID_SEGMENTS},
+    game::{Game, entities::ASTEROID_SEGMENTS},
     physics,
     worker::Worker,
 };
