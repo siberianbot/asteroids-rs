@@ -8,9 +8,9 @@ use glam::Vec2;
 use rand::seq::IteratorRandom;
 
 use crate::{
-    ecs::ECS,
-    entity::{Asteroid, TransformComponent},
     game_common::GamePlayers,
+    game_ecs::ECS,
+    game_entity::{Asteroid, TransformComponent},
 };
 
 /// State for [asteroids_respawn_game_logic]

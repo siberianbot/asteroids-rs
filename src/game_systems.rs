@@ -1,4 +1,4 @@
-use crate::ecs::SystemArgs;
+use crate::game_ecs::SystemArgs;
 
 /// Synchronizes camera position with target position
 pub fn camera_sync_system(args: SystemArgs) {
@@ -27,18 +27,18 @@ pub fn movement_system(args: SystemArgs) {
         .movement()
         .map(|movement| match movement.const_velocity {
             true => (
-                args.entity.transform().position + args.delta * movement.velocity,
+                args.entity.transform().position + args.elapsed * movement.velocity,
                 movement.velocity,
             ),
 
             false if movement.acceleration.length() > BREAKING_ACCELERATION_EPSILON => (
-                args.entity.transform().position + args.delta * movement.velocity,
-                movement.velocity + args.delta * movement.acceleration,
+                args.entity.transform().position + args.elapsed * movement.velocity,
+                movement.velocity + args.elapsed * movement.acceleration,
             ),
 
             false => (
-                args.entity.transform().position + args.delta * movement.velocity,
-                movement.velocity - args.delta * BREAKING_VELOCITY_MULTIPLIER * movement.velocity,
+                args.entity.transform().position + args.elapsed * movement.velocity,
+                movement.velocity - args.elapsed * BREAKING_VELOCITY_MULTIPLIER * movement.velocity,
             ),
         });
 
@@ -57,10 +57,10 @@ pub fn spacecraft_cooldown_system(args: SystemArgs) {
         .spacecraft()
         .filter(|spacecraft| spacecraft.cooldown > 0.0)
         .map(|spacecraft| {
-            if spacecraft.cooldown < args.delta {
+            if spacecraft.cooldown < args.elapsed {
                 0.0
             } else {
-                spacecraft.cooldown - args.delta
+                spacecraft.cooldown - args.elapsed
             }
         });
 

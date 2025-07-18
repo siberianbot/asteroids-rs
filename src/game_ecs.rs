@@ -8,7 +8,7 @@ use std::{
 
 use crate::{
     dispatch::{Dispatcher, Event, Sender},
-    entity::{Entity, EntityId},
+    game_entity::{Entity, EntityId},
     worker::Worker,
 };
 
@@ -22,8 +22,8 @@ enum Action {
 
 /// System invocation arguments
 pub struct SystemArgs<'a> {
-    /// ECS update delta time
-    pub delta: f32,
+    /// ECS update elapsed time
+    pub elapsed: f32,
     /// Current ID of entity
     pub entity_id: EntityId,
     /// Current entity
@@ -280,7 +280,7 @@ impl ECS {
 }
 
 /// INTERNAL: ECS worker thread function
-fn worker_func(ecs: &ECS, delta: f32) {
+fn worker_func(ecs: &ECS, elapsed: f32) {
     let mut entities = ecs.entities.write().unwrap();
     let systems = ecs.systems.lock().unwrap();
 
@@ -294,7 +294,7 @@ fn worker_func(ecs: &ECS, delta: f32) {
     for (entity_id, entity) in iter {
         for (_, system) in systems.iter() {
             let args = SystemArgs {
-                delta,
+                elapsed,
                 entity_id,
                 entity,
 
@@ -333,14 +333,14 @@ pub fn spawn_worker(ecs: Arc<ECS>) -> Worker {
         let mut last_update = Instant::now();
 
         while alive.load(Ordering::Relaxed) {
-            let delta = Instant::now().duration_since(last_update).as_secs_f32();
+            let elapsed = Instant::now().duration_since(last_update).as_secs_f32();
 
-            worker_func(&ecs, delta);
+            worker_func(&ecs, elapsed);
 
             last_update = Instant::now();
 
-            if delta < UPDATE_RATE {
-                let duration = Duration::from_secs_f32(UPDATE_RATE - delta);
+            if elapsed < UPDATE_RATE {
+                let duration = Duration::from_secs_f32(UPDATE_RATE - elapsed);
 
                 thread::sleep(duration);
             }

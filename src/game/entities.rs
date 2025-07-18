@@ -10,7 +10,7 @@ use glam::{Vec2, vec2};
 
 use crate::{
     dispatch::{Command, Dispatcher, Event, Sender},
-    entity::Entity,
+    game_entity::Entity,
     rendering::shaders::Vertex,
 };
 

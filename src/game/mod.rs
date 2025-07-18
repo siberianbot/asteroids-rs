@@ -11,15 +11,17 @@ use glam::Vec2;
 
 use crate::{
     dispatch::{Command, Dispatcher, Event, Sender},
-    ecs::{self, ECS, StatelessSystem},
-    entity::{Asteroid, Camera, CameraComponent, Entity, EntityId, Spacecraft, TransformComponent},
     game::entities::{
         CAMERA_DISTANCE_MULTIPLIER, CAMERA_MAX_DISTANCE, CAMERA_MIN_DISTANCE, PlayerAction,
     },
     game_common::{GamePlayer, GamePlayers},
+    game_ecs::{self, ECS, StatelessSystem},
+    game_entity::{
+        Asteroid, Camera, CameraComponent, Entity, EntityId, Spacecraft, TransformComponent,
+    },
     game_logics::{AsteroidsRespawnGameLogicState, asteroids_respawn_game_logic},
     game_loop::{self, GameLoop, StatefulGameLogic},
-    systems,
+    game_systems,
     worker::Worker,
 };
 
@@ -49,17 +51,17 @@ impl Game {
 
         ecs.add_system(
             "camera_sync_system",
-            Into::<StatelessSystem>::into(systems::camera_sync_system),
+            Into::<StatelessSystem>::into(game_systems::camera_sync_system),
         );
 
         ecs.add_system(
             "movement_system",
-            Into::<StatelessSystem>::into(systems::movement_system),
+            Into::<StatelessSystem>::into(game_systems::movement_system),
         );
 
         ecs.add_system(
             "spacecraft_cooldown_system",
-            Into::<StatelessSystem>::into(systems::spacecraft_cooldown_system),
+            Into::<StatelessSystem>::into(game_systems::spacecraft_cooldown_system),
         );
 
         let game_loop: Arc<GameLoop> = Default::default();
@@ -87,7 +89,7 @@ impl Game {
         });
 
         let game = Game {
-            _ecs_worker: ecs::spawn_worker(ecs.clone()),
+            _ecs_worker: game_ecs::spawn_worker(ecs.clone()),
             ecs,
             _game_loop_worker: game_loop::spawn_worker(game_loop.clone()),
             game_loop,

@@ -23,7 +23,6 @@ use vulkano::{
 
 use crate::{
     dispatch::{Dispatcher, Event},
-    entity::{self, EntityId},
     game::{
         Game,
         entities::{
@@ -31,6 +30,7 @@ use crate::{
             SPACECRAFT_VERTICES,
         },
     },
+    game_entity::{self, EntityId},
     rendering::{
         backend::{ShaderFactory, ShaderStage},
         shaders::{Vertex, bullet_vs, entity_fs, entity_vs},
@@ -158,7 +158,7 @@ impl Inner {
 
             entities
                 .iter_entities()
-                .filter(|(_, entity)| !matches!(entity, entity::Entity::Camera(_)))
+                .filter(|(_, entity)| !matches!(entity, game_entity::Entity::Camera(_)))
                 .for_each(|(entity_id, entity)| {
                     let render_data = render_data.entry(entity_id).or_insert_with(|| {
                         self.create_render_data(entity)
@@ -169,7 +169,7 @@ impl Inner {
                         let mut entity_buffer = render_data.entity_buffer.write().unwrap();
 
                         let model = match entity {
-                            entity::Entity::Spacecraft(spacecraft) => {
+                            game_entity::Entity::Spacecraft(spacecraft) => {
                                 Mat4::from_scale_rotation_translation(
                                     Vec3::ONE,
                                     Quat::from_rotation_z(-spacecraft.transform.rotation),
@@ -181,7 +181,7 @@ impl Inner {
                                 )
                             }
 
-                            entity::Entity::Asteroid(asteroid) => {
+                            game_entity::Entity::Asteroid(asteroid) => {
                                 Mat4::from_scale_rotation_translation(
                                     Vec3::ONE,
                                     Quat::from_rotation_z(-asteroid.transform.rotation),
@@ -193,7 +193,7 @@ impl Inner {
                                 )
                             }
 
-                            entity::Entity::Bullet(bullet) => {
+                            game_entity::Entity::Bullet(bullet) => {
                                 Mat4::from_scale_rotation_translation(
                                     Vec3::ONE,
                                     Quat::default(),
@@ -251,16 +251,16 @@ impl Inner {
         }
     }
 
-    fn create_render_data(&self, entity: &entity::Entity) -> Option<RenderData> {
+    fn create_render_data(&self, entity: &game_entity::Entity) -> Option<RenderData> {
         let entity_buffer: Subbuffer<Entity> =
             self.backend.create_buffer(BufferUsage::UNIFORM_BUFFER);
 
         let pipeline = match entity {
-            entity::Entity::Spacecraft(_) | entity::Entity::Asteroid(_) => {
+            game_entity::Entity::Spacecraft(_) | game_entity::Entity::Asteroid(_) => {
                 self.entity_pipeline.clone()
             }
 
-            entity::Entity::Bullet(_) => self.bullet_pipeline.clone(),
+            game_entity::Entity::Bullet(_) => self.bullet_pipeline.clone(),
 
             _ => return None,
         };
@@ -278,7 +278,7 @@ impl Inner {
         };
 
         let render_data = match entity {
-            entity::Entity::Spacecraft(_) => {
+            game_entity::Entity::Spacecraft(_) => {
                 {
                     entity_buffer.write().unwrap().color = Vec3::new(0.1, 0.8, 0.1);
                 }
@@ -292,7 +292,7 @@ impl Inner {
                 }
             }
 
-            entity::Entity::Asteroid(asteroid) => {
+            game_entity::Entity::Asteroid(asteroid) => {
                 {
                     entity_buffer.write().unwrap().color = Vec3::new(0.6, 0.6, 0.6);
                 }
@@ -313,7 +313,7 @@ impl Inner {
                 }
             }
 
-            entity::Entity::Bullet(_) => {
+            game_entity::Entity::Bullet(_) => {
                 {
                     entity_buffer.write().unwrap().color = Vec3::new(1.0, 1.0, 1.0);
                 }

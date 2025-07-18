@@ -455,7 +455,7 @@ impl From<Bullet> for Entity {
 pub mod consts {
     use glam::Vec2;
 
-    use crate::entity::{Collider, PointCollider, TriangleCollider};
+    use crate::game_entity::{Collider, PointCollider, TriangleCollider};
 
     /// Initial distance from object to camera center
     pub const CAMERA_INITIAL_DISTANCE: f32 = 4.0;

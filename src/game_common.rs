@@ -1,6 +1,6 @@
 use std::sync::RwLock;
 
-use crate::entity::EntityId;
+use crate::game_entity::EntityId;
 
 /// A player
 pub struct GamePlayer {

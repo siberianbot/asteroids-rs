@@ -7,9 +7,9 @@ use glam::Vec2;
 
 use crate::{
     dispatch::{Dispatcher, Event, Sender},
-    ecs::ECS,
-    entity::{Entity, EntityId},
     game::{Game, entities::ASTEROID_SEGMENTS},
+    game_ecs::ECS,
+    game_entity::{Entity, EntityId},
     physics,
     worker::Worker,
 };
