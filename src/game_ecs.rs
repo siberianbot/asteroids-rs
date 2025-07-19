@@ -1,7 +1,7 @@
 use std::{
     collections::BTreeMap,
     ptr::NonNull,
-    sync::{Arc, Mutex, RwLock, RwLockReadGuard, atomic::Ordering},
+    sync::{Arc, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard, atomic::Ordering},
     thread,
     time::{Duration, Instant},
 };
@@ -134,27 +134,144 @@ unsafe impl<S> Send for StatefulSystem<S> where S: Send + Sync {}
 
 unsafe impl<S> Sync for StatefulSystem<S> where S: Send + Sync {}
 
-/// Iterator over entities in [ECS]
-pub struct EntityIter<'a> {
+/// Trait for accessing entities collection behind the lock
+pub trait EntitiesRead {
+    /// Gets length of the entities collection
+    fn len(&self) -> usize;
+
+    /// Gets entity reference from the collection
+    fn get(&self, entity_id: EntityId) -> Option<&Entity>;
+}
+
+/// Read-only lock over entities collection in [ECS]
+pub struct EntitiesReadLock<'a> {
     entities: RwLockReadGuard<'a, Vec<Option<Entity>>>,
+}
+
+impl<'a> EntitiesReadLock<'a> {
+    /// Gets entity
+    pub fn get(&self, entity_id: EntityId) -> Option<&Entity> {
+        self.entities.get(entity_id).and_then(|slot| slot.as_ref())
+    }
+
+    /// Iterates over all entities
+    pub fn iter(&'a self) -> EntityIter<'a, EntitiesReadLock<'a>> {
+        EntityIter {
+            lock: self,
+            entity_id: 0,
+        }
+    }
+}
+
+impl<'a> EntitiesRead for EntitiesReadLock<'a> {
+    fn len(&self) -> usize {
+        self.entities.len()
+    }
+
+    fn get(&self, entity_id: EntityId) -> Option<&Entity> {
+        self.entities.get(entity_id).and_then(|slot| slot.as_ref())
+    }
+}
+
+/// Lock over entities collection in [ECS] with ability to modify data
+pub struct EntitiesWriteLock<'a> {
+    entities: RwLockWriteGuard<'a, Vec<Option<Entity>>>,
+    event_sender: Sender<Event>,
+}
+
+impl<'a> EntitiesWriteLock<'a> {
+    /// Gets entity
+    pub fn get(&self, entity_id: EntityId) -> Option<&Entity> {
+        self.entities.get(entity_id).and_then(|slot| slot.as_ref())
+    }
+
+    /// Iterates over all entities
+    pub fn iter(&'a self) -> EntityIter<'a, EntitiesWriteLock<'a>> {
+        EntityIter {
+            lock: self,
+            entity_id: 0,
+        }
+    }
+
+    /// Creates new entity
+    pub fn create<E>(&mut self, entity: E) -> EntityId
+    where
+        E: Into<Entity>,
+    {
+        let (entity_id, should_insert) = self
+            .entities
+            .iter()
+            .position(|slot| slot.is_none())
+            .map(|index| (index, false))
+            .unwrap_or_else(|| (self.entities.len(), true));
+
+        let entity = entity.into();
+
+        if should_insert {
+            self.entities.push(Some(entity));
+        } else {
+            self.entities[entity_id] = Some(entity);
+        }
+
+        self.event_sender.send(Event::EntityCreated(entity_id));
+
+        entity_id
+    }
+
+    /// Modifies entity
+    pub fn modify<V, R>(&mut self, entity_id: EntityId, visitor: V) -> Option<R>
+    where
+        V: Fn(&mut Entity) -> R,
+    {
+        self.entities
+            .get_mut(entity_id)
+            .and_then(|slot| slot.as_mut())
+            .map(visitor)
+    }
+
+    /// Destroys entity
+    pub fn destroy(&mut self, entity_id: EntityId) {
+        if let Some(slot) = self.entities.get_mut(entity_id) {
+            *slot = None;
+
+            self.event_sender.send(Event::EntityDestroyed(entity_id));
+        }
+    }
+}
+
+impl<'a> EntitiesRead for EntitiesWriteLock<'a> {
+    fn len(&self) -> usize {
+        self.entities.len()
+    }
+
+    fn get(&self, entity_id: EntityId) -> Option<&Entity> {
+        self.entities.get(entity_id).and_then(|slot| slot.as_ref())
+    }
+}
+
+/// Iterator over entities in [ECS]
+pub struct EntityIter<'a, L>
+where
+    L: EntitiesRead,
+{
+    lock: &'a L,
     entity_id: EntityId,
 }
 
-impl<'a> Iterator for EntityIter<'a> {
+impl<'a, L> Iterator for EntityIter<'a, L>
+where
+    L: EntitiesRead,
+{
     type Item = (EntityId, &'a Entity);
 
     fn next(&mut self) -> Option<Self::Item> {
-        while self.entity_id < self.entities.len() {
+        while self.entity_id < self.lock.len() {
             let entity_id = self.entity_id;
 
-            let tuple = self
-                .entities
-                .get(entity_id)
-                .and_then(|slot| slot.as_ref())
-                .map(|entity| unsafe {
-                    // HACK this iterator locks entities container thus references are valid
-                    (entity_id, NonNull::from(entity).as_ref())
-                });
+            let tuple = self.lock.get(entity_id).map(|entity| unsafe {
+                // HACK this iterator locks entities container thus references are valid
+                (entity_id, NonNull::from(entity).as_ref())
+            });
 
             self.entity_id += 1;
 
@@ -207,74 +324,18 @@ impl ECS {
         systems.remove(&name.into());
     }
 
-    /// Creates new entity
-    pub fn create_entity<E>(&self, entity: E) -> EntityId
-    where
-        E: Into<Entity>,
-    {
-        let mut entities = self.entities.write().unwrap();
-
-        let (entity_id, should_insert) = entities
-            .iter()
-            .position(|slot| slot.is_none())
-            .map(|index| (index, false))
-            .unwrap_or_else(|| (entities.len(), true));
-
-        let entity = entity.into();
-
-        if should_insert {
-            entities.push(Some(entity));
-        } else {
-            entities[entity_id] = Some(entity);
-        }
-
-        self.event_sender.send(Event::EntityCreated(entity_id));
-
-        entity_id
-    }
-
-    /// Destroys entity
-    pub fn destroy_entity(&self, entity_id: EntityId) {
-        let mut entities = self.entities.write().unwrap();
-
-        if let Some(slot) = entities.get_mut(entity_id) {
-            *slot = None;
-
-            self.event_sender.send(Event::EntityDestroyed(entity_id));
-        }
-    }
-
-    /// Visits entity immutably
-    pub fn visit_entity<V, R>(&self, entity_id: EntityId, visitor: V) -> Option<R>
-    where
-        V: Fn(&Entity) -> R,
-    {
-        let entities = self.entities.read().unwrap();
-
-        entities
-            .get(entity_id)
-            .and_then(|slot| slot.as_ref())
-            .map(visitor)
-    }
-
-    /// Visits entity and allows its mutation
-    pub fn visit_entity_mut<V, R>(&self, entity_id: EntityId, visitor: V) -> Option<R>
-    where
-        V: Fn(&mut Entity) -> R,
-    {
-        let mut entities = self.entities.write().unwrap();
-
-        entities
-            .get_mut(entity_id)
-            .and_then(|slot| slot.as_mut())
-            .map(visitor)
-    }
-
-    /// Iterates over all available entities
-    pub fn iter_entities(&self) -> EntityIter {
-        EntityIter {
+    /// Locks entities collection for reading
+    pub fn read(&self) -> EntitiesReadLock {
+        EntitiesReadLock {
             entities: self.entities.read().unwrap(),
-            entity_id: 0,
+        }
+    }
+
+    /// Locks entities collection for writing
+    pub fn write(&self) -> EntitiesWriteLock {
+        EntitiesWriteLock {
+            entities: self.entities.write().unwrap(),
+            event_sender: self.event_sender.clone(),
         }
     }
 }

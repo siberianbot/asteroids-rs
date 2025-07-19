@@ -89,7 +89,8 @@ impl Inner {
 
             move |_| {
                 game.ecs()
-                    .visit_entity_mut(game.camera_id(), |entity| {
+                    .write()
+                    .modify(game.camera_id(), |entity| {
                         let camera = entity.camera_mut().unwrap();
 
                         camera.follow = !camera.follow;
@@ -103,7 +104,8 @@ impl Inner {
 
             move |_| {
                 game.ecs()
-                    .visit_entity_mut(game.camera_id(), |entity| {
+                    .write()
+                    .modify(game.camera_id(), |entity| {
                         let camera = entity.camera_mut().unwrap();
 
                         camera.distance = camera
@@ -120,7 +122,8 @@ impl Inner {
 
             move |_| {
                 game.ecs()
-                    .visit_entity_mut(game.camera_id(), |entity| {
+                    .write()
+                    .modify(game.camera_id(), |entity| {
                         let camera = entity.camera_mut().unwrap();
 
                         camera.distance = camera

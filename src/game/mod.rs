@@ -79,14 +79,20 @@ impl Game {
 
         let physics = Physics::new(event_dispatcher, ecs.clone());
 
-        let spacecraft_entity_id = ecs.create_entity(Spacecraft::default());
-        let camera_entity_id = ecs.create_entity(Camera {
-            camera: CameraComponent {
-                target: Some(spacecraft_entity_id),
+        let (camera_entity_id, spacecraft_entity_id) = {
+            let mut entities = ecs.write();
+
+            let spacecraft_entity_id = entities.create(Spacecraft::default());
+            let camera_entity_id = entities.create(Camera {
+                camera: CameraComponent {
+                    target: Some(spacecraft_entity_id),
+                    ..Default::default()
+                },
                 ..Default::default()
-            },
-            ..Default::default()
-        });
+            });
+
+            (camera_entity_id, spacecraft_entity_id)
+        };
 
         game_players.players.write().unwrap().push(GamePlayer {
             spacecraft_id: spacecraft_entity_id,
@@ -187,19 +193,22 @@ impl Game {
                     .iter()
                     .filter_map(|entity_id| {
                         self.ecs
-                            .visit_entity(*entity_id, |entity| match entity {
+                            .read()
+                            .get(*entity_id)
+                            .and_then(|entity| match entity {
                                 Entity::Asteroid(_) => Some(Collider::Asteroid),
                                 Entity::Bullet(_) => Some(Collider::Bullet),
                                 _ => None,
                             })
-                            .flatten()
                     })
                     .collect::<BTreeSet<_>>();
 
                 if colliders.contains(&Collider::Asteroid) && colliders.contains(&Collider::Bullet)
                 {
+                    let mut entities = self.ecs.write();
+
                     for entity_id in collision {
-                        self.ecs.destroy_entity(*entity_id);
+                        entities.destroy(*entity_id);
                     }
                 }
             }

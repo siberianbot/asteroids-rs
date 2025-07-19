@@ -134,11 +134,13 @@ impl Inner {
                 )
                 .expect("failed to set viewport");
 
-            let entities = self.game.ecs();
+            let ecs = self.game.ecs();
+            let entities = ecs.read();
             let mut render_data = self.render_data.lock().unwrap();
 
             let camera_matrix = entities
-                .visit_entity(self.game.camera_id(), |entity| {
+                .get(self.game.camera_id())
+                .map(|entity| {
                     let transform = entity.transform();
                     let camera = entity.camera().unwrap();
 
@@ -157,7 +159,7 @@ impl Inner {
                 .expect("there is not camera entity");
 
             entities
-                .iter_entities()
+                .iter()
                 .filter(|(_, entity)| !matches!(entity, game_entity::Entity::Camera(_)))
                 .for_each(|(entity_id, entity)| {
                     let render_data = render_data.entry(entity_id).or_insert_with(|| {
@@ -334,11 +336,12 @@ impl Inner {
     }
 
     fn dispatch_entity_created(&self, entity_id: EntityId) {
-        let entities = self.game.ecs();
+        let ecs = self.game.ecs();
 
-        let data = entities
-            .visit_entity(entity_id, |entity| self.create_render_data(entity))
-            .flatten();
+        let data = ecs
+            .read()
+            .get(entity_id)
+            .and_then(|entity| self.create_render_data(entity));
 
         if let Some(data) = data {
             self.render_data.lock().unwrap().insert(entity_id, data);

@@ -177,10 +177,11 @@ impl Physics {
 
 /// INTERNAL: Physics worker thread function
 fn worker_func(physics: &Physics) {
+    let entities = physics.ecs.read();
+
     let iter_entities = || {
-        physics
-            .ecs
-            .iter_entities()
+        entities
+            .iter()
             .filter_map(|(entity_id, entity)| {
                 entity
                     .collider()

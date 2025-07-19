@@ -48,9 +48,10 @@ pub fn asteroids_respawn_game_logic(elapsed: f32, state: &AsteroidsRespawnGameLo
 
     *passed = 0.0;
 
-    let count = state
-        .ecs
-        .iter_entities()
+    let mut entities = state.ecs.write();
+
+    let count = entities
+        .iter()
         .filter_map(|(_, entity)| entity.asteroid())
         .count();
 
@@ -65,9 +66,9 @@ pub fn asteroids_respawn_game_logic(elapsed: f32, state: &AsteroidsRespawnGameLo
         .unwrap()
         .iter()
         .filter_map(|player| {
-            state
-                .ecs
-                .visit_entity(player.spacecraft_id, |entity| entity.transform().position)
+            entities
+                .get(player.spacecraft_id)
+                .map(|entity| entity.transform().position)
         })
         .choose(&mut rand::rng())
         .unwrap_or_else(|| Vec2::ZERO);
@@ -84,5 +85,5 @@ pub fn asteroids_respawn_game_logic(elapsed: f32, state: &AsteroidsRespawnGameLo
         ..Default::default()
     };
 
-    state.ecs.create_entity(asteroid);
+    entities.create(asteroid);
 }
