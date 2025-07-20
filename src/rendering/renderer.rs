@@ -23,16 +23,14 @@ use vulkano::{
 
 use crate::{
     dispatch::{Dispatcher, Event},
-    game::{
-        Game,
-        entities::{
-            self, ASTEROID_INDICES, BULLET_INDICES, BULLET_VERTICES, SPACECRAFT_INDICES,
-            SPACECRAFT_VERTICES,
-        },
-    },
+    game::Game,
     game_entity::{self, EntityId},
     rendering::{
         backend::{ShaderFactory, ShaderStage},
+        models::{
+            ASTEROID_INDICES, BULLET_INDICES, BULLET_VERTICES, SPACECRAFT_INDICES,
+            SPACECRAFT_VERTICES,
+        },
         shaders::{Vertex, bullet_vs, entity_fs, entity_vs},
     },
     worker::Worker,
@@ -138,108 +136,109 @@ impl Inner {
             let entities = ecs.read();
             let mut render_data = self.render_data.lock().unwrap();
 
-            let camera_matrix = entities
-                .get(self.game.camera_id())
-                .map(|entity| {
-                    let transform = entity.transform();
-                    let camera = entity.camera().unwrap();
+            // TODO
+            // let camera_matrix = entities
+            //     .get(self.game.camera_id())
+            //     .map(|entity| {
+            //         let transform = entity.transform();
+            //         let camera = entity.camera().unwrap();
 
-                    let mut projection =
-                        Mat4::perspective_infinite_lh(PI / 2.0, frame.aspect(), 0.001);
-                    projection.col_mut(1)[1] *= -1.0;
+            //         let mut projection =
+            //             Mat4::perspective_infinite_lh(PI / 2.0, frame.aspect(), 0.001);
+            //         projection.col_mut(1)[1] *= -1.0;
 
-                    let view = Mat4::look_at_lh(
-                        Vec3::new(transform.position.x, transform.position.y, camera.distance),
-                        Vec3::new(transform.position.x, transform.position.y, 0.0),
-                        Vec3::new(0.0, 1.0, 0.0),
-                    );
+            //         let view = Mat4::look_at_lh(
+            //             Vec3::new(transform.position.x, transform.position.y, camera.distance),
+            //             Vec3::new(transform.position.x, transform.position.y, 0.0),
+            //             Vec3::new(0.0, 1.0, 0.0),
+            //         );
 
-                    projection * view
-                })
-                .expect("there is not camera entity");
+            //         projection * view
+            //     })
+            //     .expect("there is not camera entity");
 
-            entities
-                .iter()
-                .filter(|(_, entity)| !matches!(entity, game_entity::Entity::Camera(_)))
-                .for_each(|(entity_id, entity)| {
-                    let render_data = render_data.entry(entity_id).or_insert_with(|| {
-                        self.create_render_data(entity)
-                            .expect("entity is not renderable")
-                    });
+            // entities
+            //     .iter()
+            //     .filter(|(_, entity)| !matches!(entity, game_entity::Entity::Camera(_)))
+            //     .for_each(|(entity_id, entity)| {
+            //         let render_data = render_data.entry(entity_id).or_insert_with(|| {
+            //             self.create_render_data(entity)
+            //                 .expect("entity is not renderable")
+            //         });
 
-                    {
-                        let mut entity_buffer = render_data.entity_buffer.write().unwrap();
+            //         {
+            //             let mut entity_buffer = render_data.entity_buffer.write().unwrap();
 
-                        let model = match entity {
-                            game_entity::Entity::Spacecraft(spacecraft) => {
-                                Mat4::from_scale_rotation_translation(
-                                    Vec3::ONE,
-                                    Quat::from_rotation_z(-spacecraft.transform.rotation),
-                                    Vec3::new(
-                                        spacecraft.transform.position.x,
-                                        spacecraft.transform.position.y,
-                                        0.0,
-                                    ),
-                                )
-                            }
+            //             let model = match entity {
+            //                 game_entity::Entity::Spacecraft(spacecraft) => {
+            //                     Mat4::from_scale_rotation_translation(
+            //                         Vec3::ONE,
+            //                         Quat::from_rotation_z(-spacecraft.transform.rotation),
+            //                         Vec3::new(
+            //                             spacecraft.transform.position.x,
+            //                             spacecraft.transform.position.y,
+            //                             0.0,
+            //                         ),
+            //                     )
+            //                 }
 
-                            game_entity::Entity::Asteroid(asteroid) => {
-                                Mat4::from_scale_rotation_translation(
-                                    Vec3::ONE,
-                                    Quat::from_rotation_z(-asteroid.transform.rotation),
-                                    Vec3::new(
-                                        asteroid.transform.position.x,
-                                        asteroid.transform.position.y,
-                                        0.0,
-                                    ),
-                                )
-                            }
+            //                 game_entity::Entity::Asteroid(asteroid) => {
+            //                     Mat4::from_scale_rotation_translation(
+            //                         Vec3::ONE,
+            //                         Quat::from_rotation_z(-asteroid.transform.rotation),
+            //                         Vec3::new(
+            //                             asteroid.transform.position.x,
+            //                             asteroid.transform.position.y,
+            //                             0.0,
+            //                         ),
+            //                     )
+            //                 }
 
-                            game_entity::Entity::Bullet(bullet) => {
-                                Mat4::from_scale_rotation_translation(
-                                    Vec3::ONE,
-                                    Quat::default(),
-                                    Vec3::new(
-                                        bullet.transform.position.x,
-                                        bullet.transform.position.y,
-                                        0.0,
-                                    ),
-                                )
-                            }
+            //                 game_entity::Entity::Bullet(bullet) => {
+            //                     Mat4::from_scale_rotation_translation(
+            //                         Vec3::ONE,
+            //                         Quat::default(),
+            //                         Vec3::new(
+            //                             bullet.transform.position.x,
+            //                             bullet.transform.position.y,
+            //                             0.0,
+            //                         ),
+            //                     )
+            //                 }
 
-                            _ => unreachable!(),
-                        };
+            //                 _ => unreachable!(),
+            //             };
 
-                        entity_buffer.matrix = camera_matrix * model
-                    }
+            //             entity_buffer.matrix = camera_matrix * model
+            //         }
 
-                    command_buffer_builder
-                        .bind_pipeline_graphics(render_data.pipeline.clone())
-                        .expect("failed to bind entity pipeline");
+            //         command_buffer_builder
+            //             .bind_pipeline_graphics(render_data.pipeline.clone())
+            //             .expect("failed to bind entity pipeline");
 
-                    command_buffer_builder
-                        .bind_vertex_buffers(0, render_data.vertex_buffer.clone())
-                        .expect("failed to bind vertex buffer");
+            //         command_buffer_builder
+            //             .bind_vertex_buffers(0, render_data.vertex_buffer.clone())
+            //             .expect("failed to bind vertex buffer");
 
-                    command_buffer_builder
-                        .bind_index_buffer(render_data.index_buffer.clone())
-                        .expect("failed to bind index buffer");
+            //         command_buffer_builder
+            //             .bind_index_buffer(render_data.index_buffer.clone())
+            //             .expect("failed to bind index buffer");
 
-                    command_buffer_builder
-                        .bind_descriptor_sets(
-                            PipelineBindPoint::Graphics,
-                            self.entity_pipeline.layout().clone(),
-                            0,
-                            vec![render_data.entity_buffer_descriptor_set.clone()],
-                        )
-                        .expect("failed to bind descriptor set");
+            //         command_buffer_builder
+            //             .bind_descriptor_sets(
+            //                 PipelineBindPoint::Graphics,
+            //                 self.entity_pipeline.layout().clone(),
+            //                 0,
+            //                 vec![render_data.entity_buffer_descriptor_set.clone()],
+            //             )
+            //             .expect("failed to bind descriptor set");
 
-                    unsafe {
-                        command_buffer_builder
-                            .draw_indexed(render_data.index_buffer.len() as u32, 1, 0, 0, 0)
-                            .expect("failed to draw entity");
-                    }
-                });
+            //         unsafe {
+            //             command_buffer_builder
+            //                 .draw_indexed(render_data.index_buffer.len() as u32, 1, 0, 0, 0)
+            //                 .expect("failed to draw entity");
+            //         }
+            //     });
 
             command_buffer_builder
                 .end_rendering()

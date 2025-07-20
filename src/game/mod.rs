@@ -1,55 +1,29 @@
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    f32::consts::PI,
-    ops::{Div, Mul, RangeInclusive},
-    sync::{Arc, Mutex, atomic::Ordering},
-    thread,
-    time::{Duration, Instant},
-};
-
-use glam::Vec2;
+use std::sync::Arc;
 
 use crate::{
-    dispatch::{Command, Dispatcher, Event, Sender},
-    game::entities::{
-        CAMERA_DISTANCE_MULTIPLIER, CAMERA_MAX_DISTANCE, CAMERA_MIN_DISTANCE, PlayerAction,
-    },
-    game_common::{GamePlayer, GamePlayers},
+    dispatch::{Dispatcher, Event},
     game_ecs::{self, ECS, StatelessSystem},
-    game_entity::{
-        Asteroid, Camera, CameraComponent, Entity, EntityId, Spacecraft, TransformComponent,
-    },
     game_logics::{AsteroidsRespawnGameLogicState, asteroids_respawn_game_logic},
     game_loop::{self, GameLoop, StatefulGameLogic},
     game_physics::{self, Physics},
+    game_players::GamePlayers,
     game_systems,
     worker::Worker,
 };
 
-pub mod entities;
-
-const MAX_DISTANCE: f32 = 100.0;
-const SAFE_DISTANCE: RangeInclusive<f32> = 15.0..=MAX_DISTANCE;
-const FIRE_COOLDOWN: f32 = 0.5;
-const BULLET_VELOCITY: f32 = 12.5;
-
+/// Game infrastructure
 pub struct Game {
     ecs: Arc<ECS>,
-    _ecs_worker: Worker,
-    game_loop: Arc<GameLoop>,
-    _game_loop_worker: Worker,
-    _physics_worker: Worker,
-
-    camera_id: EntityId,
-    game_players: Arc<GamePlayers>,
+    _workers: [Worker; 3],
 }
 
 impl Game {
-    pub fn new(
-        command_dispatcher: &Dispatcher<Command>,
-        event_dispatcher: &Dispatcher<Event>,
-    ) -> Arc<Game> {
+    /// Creates new instance of [Game] with default systems and game logics
+    pub fn new(event_dispatcher: &Dispatcher<Event>) -> Arc<Game> {
         let ecs = ECS::new(event_dispatcher);
+        let game_loop: Arc<GameLoop> = Default::default();
+        let game_players: Arc<GamePlayers> = Default::default();
+        let physics = Physics::new(event_dispatcher, ecs.clone());
 
         ecs.add_system(
             "camera_sync_system",
@@ -66,177 +40,37 @@ impl Game {
             Into::<StatelessSystem>::into(game_systems::spacecraft_cooldown_system),
         );
 
-        let game_loop: Arc<GameLoop> = Default::default();
-        let game_players: Arc<GamePlayers> = Default::default();
+        // TODO: add asteroid rotation system
+
+        // TODO: add entities despawn system
+
+        // TODO: add init game logic
+
+        // TODO: add game logic, which ties game and renderer
 
         game_loop.add_logic(
             "asteroids_respawn_game_logic",
             StatefulGameLogic::new(
-                AsteroidsRespawnGameLogicState::new(ecs.clone(), game_players.clone()),
+                AsteroidsRespawnGameLogicState::new(ecs.clone(), game_players),
                 asteroids_respawn_game_logic,
             ),
         );
 
-        let physics = Physics::new(event_dispatcher, ecs.clone());
-
-        let (camera_entity_id, spacecraft_entity_id) = {
-            let mut entities = ecs.write();
-
-            let spacecraft_entity_id = entities.create(Spacecraft::default());
-            let camera_entity_id = entities.create(Camera {
-                camera: CameraComponent {
-                    target: Some(spacecraft_entity_id),
-                    ..Default::default()
-                },
-                ..Default::default()
-            });
-
-            (camera_entity_id, spacecraft_entity_id)
-        };
-
-        game_players.players.write().unwrap().push(GamePlayer {
-            spacecraft_id: spacecraft_entity_id,
-        });
-
         let game = Game {
-            _ecs_worker: game_ecs::spawn_worker(ecs.clone()),
-            ecs,
-            _game_loop_worker: game_loop::spawn_worker(game_loop.clone()),
-            game_loop,
-            _physics_worker: game_physics::spawn_worker(physics),
+            _workers: [
+                game_ecs::spawn_worker(ecs.clone()),
+                game_loop::spawn_worker(game_loop),
+                game_physics::spawn_worker(physics),
+            ],
 
-            camera_id: camera_entity_id,
-            game_players,
+            ecs,
         };
 
-        let game = Arc::new(game);
-
-        {
-            let game = game.clone();
-
-            command_dispatcher.add_handler(move |command| {
-                game.handle_command(command);
-            });
-        }
-
-        {
-            let game = game.clone();
-
-            event_dispatcher.add_handler(move |event| {
-                game.handle_event(event);
-            });
-        }
-
-        game
+        Arc::new(game)
     }
 
+    /// Accesses to Entity-Component-System infrastructre within a game
     pub fn ecs(&self) -> Arc<ECS> {
         self.ecs.clone()
     }
-
-    pub fn camera_id(&self) -> EntityId {
-        self.camera_id
-    }
-
-    fn handle_command(&self, command: &Command) {
-        match command {
-            // Command::PlayerActionDown(action) => self
-            //     .entities
-            //     .visit_mut(self.state.spacecraft_id, |entity| {
-            //         entity.to_spacecraft_mut().action |= *action;
-            //     })
-            //     .expect("there is not player entity"),
-
-            // Command::PlayerActionUp(action) => self
-            //     .entities
-            //     .visit_mut(self.state.spacecraft_id, |entity| {
-            //         entity.to_spacecraft_mut().action &= !*action;
-            //     })
-            //     .expect("there is not player entity"),
-
-            // Command::PlayerFire => {
-            //     let (position, rotation) = self
-            //         .entities
-            //         .visit_mut(self.state.spacecraft_id, |entity| {
-            //             let spacecraft = entity.to_spacecraft_mut();
-            //             spacecraft.fire_cooldown = FIRE_COOLDOWN;
-
-            //             (spacecraft.position, spacecraft.rotation)
-            //         })
-            //         .expect("there is not player entity");
-
-            //     let bullet = Bullet {
-            //         position,
-            //         velocity: BULLET_VELOCITY
-            //             * Vec2::new(1.0, 0.0).rotate(rotation.sin_cos().into()),
-            //         owner_id: self.state.spacecraft_id,
-
-            //         ..Default::default()
-            //     };
-
-            //     self.entities.create(bullet);
-            // }
-            _ => {}
-        }
-    }
-
-    fn handle_event(&self, event: &Event) {
-        #[derive(PartialEq, Eq, PartialOrd, Ord)]
-        enum Collider {
-            Asteroid,
-            Bullet,
-        }
-
-        match event {
-            Event::CollisionOccurred(collision) => {
-                let colliders = collision
-                    .iter()
-                    .filter_map(|entity_id| {
-                        self.ecs
-                            .read()
-                            .get(*entity_id)
-                            .and_then(|entity| match entity {
-                                Entity::Asteroid(_) => Some(Collider::Asteroid),
-                                Entity::Bullet(_) => Some(Collider::Bullet),
-                                _ => None,
-                            })
-                    })
-                    .collect::<BTreeSet<_>>();
-
-                if colliders.contains(&Collider::Asteroid) && colliders.contains(&Collider::Bullet)
-                {
-                    let mut entities = self.ecs.write();
-
-                    for entity_id in collision {
-                        entities.destroy(*entity_id);
-                    }
-                }
-            }
-
-            _ => {}
-        }
-    }
-
-    // fn entities_despawn(context: UpdateContext<State>) {
-    //     let player_position = context
-    //         .get_entity(context.data().spacecraft_id)
-    //         .map(|spacecraft| spacecraft.transform().position)
-    //         .expect("there is no player entity");
-
-    //     let entity_position = match context.current_entity() {
-    //         Entity::Spacecraft(spacecraft) => Some(spacecraft.transform.position),
-    //         Entity::Asteroid(asteroid) => Some(asteroid.transform.position),
-    //         Entity::Bullet(bullet) => Some(bullet.transform.position),
-
-    //         _ => None,
-    //     };
-
-    //     if let Some(asteroid_position) = entity_position {
-    //         let distance = player_position.distance(asteroid_position);
-
-    //         if distance >= MAX_DISTANCE {
-    //             context.destroy();
-    //         }
-    //     }
-    // }
 }

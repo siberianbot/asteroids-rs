@@ -13,10 +13,7 @@ use winit::{
 
 use crate::{
     dispatch::{Command, Dispatcher, Event, Sender},
-    game::{
-        Game,
-        entities::{CAMERA_DISTANCE_MULTIPLIER, CAMERA_MAX_DISTANCE, CAMERA_MIN_DISTANCE},
-    },
+    game::Game,
     input::{self},
     rendering::{backend::Backend, renderer::Renderer},
     worker::Worker,
@@ -26,6 +23,10 @@ use crate::{
 enum AppEvent {
     Exit,
 }
+
+pub const CAMERA_MIN_DISTANCE: f32 = 1.0;
+pub const CAMERA_MAX_DISTANCE: f32 = 32.0;
+pub const CAMERA_DISTANCE_MULTIPLIER: f32 = 2.0;
 
 struct Inner {
     command_sender: Sender<Command>,
@@ -84,57 +85,6 @@ impl Inner {
             command_sender.send(Command::Exit);
         });
 
-        manager.set_action("camera_follow", {
-            let game = game.clone();
-
-            move |_| {
-                game.ecs()
-                    .write()
-                    .modify(game.camera_id(), |entity| {
-                        let camera = entity.camera_mut().unwrap();
-
-                        camera.follow = !camera.follow;
-                    })
-                    .expect("there is not camera entity");
-            }
-        });
-
-        manager.set_action("camera_zoom_in", {
-            let game = game.clone();
-
-            move |_| {
-                game.ecs()
-                    .write()
-                    .modify(game.camera_id(), |entity| {
-                        let camera = entity.camera_mut().unwrap();
-
-                        camera.distance = camera
-                            .distance
-                            .div(CAMERA_DISTANCE_MULTIPLIER)
-                            .clamp(CAMERA_MIN_DISTANCE, CAMERA_MAX_DISTANCE);
-                    })
-                    .expect("there is not camera entity");
-            }
-        });
-
-        manager.set_action("camera_zoom_out", {
-            let game = game.clone();
-
-            move |_| {
-                game.ecs()
-                    .write()
-                    .modify(game.camera_id(), |entity| {
-                        let camera = entity.camera_mut().unwrap();
-
-                        camera.distance = camera
-                            .distance
-                            .mul(CAMERA_DISTANCE_MULTIPLIER)
-                            .clamp(CAMERA_MIN_DISTANCE, CAMERA_MAX_DISTANCE);
-                    })
-                    .expect("there is not camera entity");
-            }
-        });
-
         manager
     }
 
@@ -185,7 +135,7 @@ impl App {
             _ => {}
         });
 
-        let game = Game::new(&command_dispatcher, &event_dispatcher);
+        let game = Game::new(&event_dispatcher);
 
         let dispatcher_worker = {
             let command_dispatcher = command_dispatcher.clone();
