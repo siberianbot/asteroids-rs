@@ -9,7 +9,7 @@ use glam::Vec2;
 
 use crate::{
     dispatch::{Dispatcher, Event, Sender},
-    game_ecs::ECS,
+    game::ecs::ECS,
     worker::Worker,
 };
 

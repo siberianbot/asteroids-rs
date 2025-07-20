@@ -2,14 +2,24 @@ use std::sync::Arc;
 
 use crate::{
     dispatch::{Dispatcher, Event},
-    game_ecs::{self, ECS, StatelessSystem},
-    game_logics::{AsteroidsRespawnGameLogicState, asteroids_respawn_game_logic},
-    game_loop::{self, GameLoop, StatefulGameLogic},
-    game_physics::{self, Physics},
-    game_players::GamePlayers,
-    game_systems,
+    game::{
+        ecs::{ECS, StatelessSystem},
+        logics::{AsteroidsRespawnGameLogicState, asteroids_respawn_game_logic},
+        r#loop::{GameLoop, StatefulGameLogic},
+        physics::Physics,
+        players::GamePlayers,
+    },
     worker::Worker,
 };
+
+pub mod ecs;
+pub mod entities;
+
+mod logics;
+mod r#loop;
+mod physics;
+mod players;
+mod systems;
 
 /// Game infrastructure
 pub struct Game {
@@ -27,17 +37,17 @@ impl Game {
 
         ecs.add_system(
             "camera_sync_system",
-            Into::<StatelessSystem>::into(game_systems::camera_sync_system),
+            Into::<StatelessSystem>::into(systems::camera_sync_system),
         );
 
         ecs.add_system(
             "movement_system",
-            Into::<StatelessSystem>::into(game_systems::movement_system),
+            Into::<StatelessSystem>::into(systems::movement_system),
         );
 
         ecs.add_system(
             "spacecraft_cooldown_system",
-            Into::<StatelessSystem>::into(game_systems::spacecraft_cooldown_system),
+            Into::<StatelessSystem>::into(systems::spacecraft_cooldown_system),
         );
 
         // TODO: add asteroid rotation system
@@ -58,9 +68,9 @@ impl Game {
 
         let game = Game {
             _workers: [
-                game_ecs::spawn_worker(ecs.clone()),
-                game_loop::spawn_worker(game_loop),
-                game_physics::spawn_worker(physics),
+                ecs::spawn_worker(ecs.clone()),
+                r#loop::spawn_worker(game_loop),
+                physics::spawn_worker(physics),
             ],
 
             ecs,

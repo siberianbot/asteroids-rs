@@ -24,7 +24,7 @@ use vulkano::{
 use crate::{
     dispatch::{Dispatcher, Event},
     game::Game,
-    game_entity::{self, EntityId},
+    game::entities::{self, EntityId},
     rendering::{
         backend::{ShaderFactory, ShaderStage},
         models::{
@@ -252,16 +252,16 @@ impl Inner {
         }
     }
 
-    fn create_render_data(&self, entity: &game_entity::Entity) -> Option<RenderData> {
+    fn create_render_data(&self, entity: &entities::Entity) -> Option<RenderData> {
         let entity_buffer: Subbuffer<Entity> =
             self.backend.create_buffer(BufferUsage::UNIFORM_BUFFER);
 
         let pipeline = match entity {
-            game_entity::Entity::Spacecraft(_) | game_entity::Entity::Asteroid(_) => {
+            entities::Entity::Spacecraft(_) | entities::Entity::Asteroid(_) => {
                 self.entity_pipeline.clone()
             }
 
-            game_entity::Entity::Bullet(_) => self.bullet_pipeline.clone(),
+            entities::Entity::Bullet(_) => self.bullet_pipeline.clone(),
 
             _ => return None,
         };
@@ -279,7 +279,7 @@ impl Inner {
         };
 
         let render_data = match entity {
-            game_entity::Entity::Spacecraft(_) => {
+            entities::Entity::Spacecraft(_) => {
                 {
                     entity_buffer.write().unwrap().color = Vec3::new(0.1, 0.8, 0.1);
                 }
@@ -293,7 +293,7 @@ impl Inner {
                 }
             }
 
-            game_entity::Entity::Asteroid(asteroid) => {
+            entities::Entity::Asteroid(asteroid) => {
                 {
                     entity_buffer.write().unwrap().color = Vec3::new(0.6, 0.6, 0.6);
                 }
@@ -314,7 +314,7 @@ impl Inner {
                 }
             }
 
-            game_entity::Entity::Bullet(_) => {
+            entities::Entity::Bullet(_) => {
                 {
                     entity_buffer.write().unwrap().color = Vec3::new(1.0, 1.0, 1.0);
                 }

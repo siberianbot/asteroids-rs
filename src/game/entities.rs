@@ -2,7 +2,7 @@ use std::{f32::consts::PI, ops::RangeInclusive};
 
 use glam::Vec2;
 
-use crate::game_physics::{Collider, TriangleCollider};
+use crate::game::physics::{Collider, TriangleCollider};
 
 /// Identifier of entity
 pub type EntityId = usize;
@@ -415,7 +415,7 @@ impl From<Bullet> for Entity {
 pub mod consts {
     use glam::Vec2;
 
-    use crate::game_physics::{Collider, PointCollider, TriangleCollider};
+    use crate::game::physics::{Collider, PointCollider, TriangleCollider};
 
     /// Initial distance from object to camera center
     pub const CAMERA_INITIAL_DISTANCE: f32 = 4.0;

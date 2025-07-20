@@ -1,4 +1,4 @@
-use crate::game_ecs::SystemArgs;
+use crate::game::ecs::SystemArgs;
 
 /// Synchronizes camera position with target position
 pub fn camera_sync_system(args: SystemArgs) {

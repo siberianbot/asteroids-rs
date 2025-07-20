@@ -8,7 +8,7 @@ use std::{
 
 use crate::{
     dispatch::{Dispatcher, Event, Sender},
-    game_entity::{Entity, EntityId},
+    game::entities::{Entity, EntityId},
     worker::Worker,
 };
 
