@@ -1,4 +1,11 @@
-use crate::game::ecs::SystemArgs;
+use std::sync::Arc;
+
+use crate::game::{
+    ecs::SystemArgs,
+    players::{self, GamePlayers},
+};
+
+use super::entities::Entity;
 
 /// Synchronizes camera position with target position
 pub fn camera_sync_system(args: SystemArgs) {
@@ -66,5 +73,90 @@ pub fn spacecraft_cooldown_system(args: SystemArgs) {
 
     if let Some(cooldown) = cooldown {
         args.modify(move |entity| entity.spacecraft_mut().unwrap().cooldown = cooldown);
+    }
+}
+
+/// Rotates asteroid by its rotation velocity
+pub fn asteroid_rotation_system(args: SystemArgs) {
+    let rotation = args.entity.asteroid().map(|asteroid| {
+        args.entity.transform().rotation + args.elapsed * asteroid.rotation_velocity
+    });
+
+    if let Some(rotation) = rotation {
+        args.modify(move |entity| entity.transform_mut().rotation = rotation);
+    }
+}
+
+/// State for [entity_despawn_system]
+pub struct EntityDespawnSystemState {
+    players: Arc<GamePlayers>,
+}
+
+impl EntityDespawnSystemState {
+    /// Creates new instance of [EntityDespawnSystemState]
+    pub fn new(players: Arc<GamePlayers>) -> EntityDespawnSystemState {
+        EntityDespawnSystemState { players }
+    }
+}
+
+/// Despawns entity when its far away from any players
+pub fn entity_despawn_system(args: SystemArgs, state: &EntityDespawnSystemState) {
+    const MAX_DISTANCE: f32 = 150.0;
+
+    if args.entity.asteroid().is_none() {
+        return;
+    }
+
+    let players = state.players.players.read().unwrap();
+
+    let any_near = players
+        .iter()
+        .filter_map(|player| {
+            args.get_entity(player.spacecraft_id).map(|spacecraft| {
+                args.entity
+                    .transform()
+                    .position
+                    .distance(spacecraft.transform().position)
+            })
+        })
+        .any(|distance| distance < MAX_DISTANCE);
+
+    if !any_near {
+        args.destroy();
+    }
+}
+
+/// State for [renderer_dispatch_system]
+pub struct RendererDispatchSystemState {
+    // TODO
+}
+
+impl RendererDispatchSystemState {
+    /// Creates new instance of [RendererDispatchSystemState]
+    pub fn new() -> RendererDispatchSystemState {
+        RendererDispatchSystemState {
+            // TODO
+        }
+    }
+}
+
+/// Dispatches data from entity to renderer
+pub fn renderer_dispatch_system(args: SystemArgs, state: &RendererDispatchSystemState) {
+    match args.entity {
+        Entity::Camera(camera) => {
+            // TODO: send view data to renderer
+        }
+
+        Entity::Spacecraft(spacecraft) => {
+            // TODO: send entity data to renderer
+        }
+
+        Entity::Asteroid(asteroid) => {
+            // TODO: send entity data to renderer
+        }
+
+        Entity::Bullet(bullet) => {
+            // TODO: send entity data to renderer
+        }
     }
 }

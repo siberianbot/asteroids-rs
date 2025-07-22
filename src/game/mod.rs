@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::{
     dispatch::{Dispatcher, Event},
     game::{
-        ecs::{ECS, StatelessSystem},
+        ecs::{ECS, StatefulSystem, StatelessSystem},
         logics::{AsteroidsRespawnGameLogicState, asteroids_respawn_game_logic},
         r#loop::{GameLoop, StatefulGameLogic},
         physics::Physics,
@@ -50,13 +50,28 @@ impl Game {
             Into::<StatelessSystem>::into(systems::spacecraft_cooldown_system),
         );
 
-        // TODO: add asteroid rotation system
+        ecs.add_system(
+            "asteroid_rotation_system",
+            Into::<StatelessSystem>::into(systems::asteroid_rotation_system),
+        );
 
-        // TODO: add entities despawn system
+        ecs.add_system(
+            "renderer_dispatch_system",
+            StatefulSystem::new(
+                systems::RendererDispatchSystemState::new(),
+                systems::renderer_dispatch_system,
+            ),
+        );
+
+        ecs.add_system(
+            "entity_despawn_system",
+            StatefulSystem::new(
+                systems::EntityDespawnSystemState::new(game_players.clone()),
+                systems::entity_despawn_system,
+            ),
+        );
 
         // TODO: add init game logic
-
-        // TODO: add game logic, which ties game and renderer
 
         game_loop.add_logic(
             "asteroids_respawn_game_logic",
