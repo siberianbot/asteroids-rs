@@ -79,12 +79,6 @@ impl<T> Dispatcher<T> {
     }
 }
 
-#[derive(Debug, PartialEq)]
-#[non_exhaustive]
-pub enum Command {
-    Exit,
-}
-
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub enum Event {
@@ -92,26 +86,4 @@ pub enum Event {
     EntityCreated(EntityId),
     EntityDestroyed(EntityId),
     CollisionOccurred([EntityId; 2]), // TODO: use ECS/game logics for collision handling
-}
-
-#[cfg(test)]
-mod tests {
-    use super::Command;
-    use super::Dispatcher;
-
-    #[test]
-    fn commands_test() {
-        const COMMAND: Command = Command::Exit;
-
-        let dispatcher = Dispatcher::new();
-
-        dispatcher.add_handler(|command: &Command| {
-            assert!(matches!(command, &COMMAND));
-        });
-
-        let sender = dispatcher.create_sender();
-        sender.send(COMMAND);
-
-        dispatcher.dispatch();
-    }
 }

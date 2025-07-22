@@ -1,4 +1,5 @@
 mod app;
+mod commands;
 mod dispatch;
 mod game;
 mod input;

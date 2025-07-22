@@ -12,7 +12,8 @@ use winit::{
 };
 
 use crate::{
-    dispatch::{Command, Dispatcher, Event, Sender},
+    commands::{self, Commands},
+    dispatch::{Dispatcher, Event, Sender},
     game::Game,
     input::{self},
     rendering::{backend::Backend, renderer::Renderer},
@@ -29,7 +30,7 @@ pub const CAMERA_MAX_DISTANCE: f32 = 32.0;
 pub const CAMERA_DISTANCE_MULTIPLIER: f32 = 2.0;
 
 struct Inner {
-    command_sender: Sender<Command>,
+    commands: Arc<Commands>,
     event_sender: Sender<Event>,
     input_manager: input::Manager,
     window: Arc<Window>,
@@ -39,7 +40,7 @@ struct Inner {
 
 impl Inner {
     fn new(
-        command_dispatcher: &Dispatcher<Command>,
+        commands: Arc<Commands>,
         event_dispatcher: &Dispatcher<Event>,
         game: Arc<Game>,
         event_loop: &ActiveEventLoop,
@@ -50,9 +51,9 @@ impl Inner {
         let renderer = Renderer::new(event_dispatcher, game.clone(), backend.clone());
 
         let inner = Inner {
-            command_sender: command_dispatcher.create_sender(),
             event_sender: event_dispatcher.create_sender(),
-            input_manager: Self::init_input(command_dispatcher.create_sender(), game.clone()),
+            input_manager: Self::init_input(commands.clone(), game.clone()),
+            commands,
             window,
             backend,
             _renderer: renderer,
@@ -73,17 +74,13 @@ impl Inner {
         Arc::new(window)
     }
 
-    fn init_input(command_sender: Sender<Command>, game: Arc<Game>) -> input::Manager {
-        let manager = input::Manager::default();
+    fn init_input(commands: Arc<Commands>, game: Arc<Game>) -> input::Manager {
+        let manager = input::Manager::new(commands);
 
         manager.set_key_map(input::Key::KbdEscape, "exit");
         manager.set_key_map(input::Key::KbdF, "camera_follow");
         manager.set_key_map(input::Key::KbdQ, "camera_zoom_out");
         manager.set_key_map(input::Key::KbdE, "camera_zoom_in");
-
-        manager.set_action("exit", move |_| {
-            command_sender.send(Command::Exit);
-        });
 
         manager
     }
@@ -99,7 +96,7 @@ impl Inner {
             }
 
             WindowEvent::CloseRequested => {
-                self.command_sender.send(Command::Exit);
+                self.commands.invoke("exit", &[]);
             }
 
             WindowEvent::KeyboardInput { event, .. } => {
@@ -113,7 +110,9 @@ impl Inner {
 }
 
 struct App {
-    command_dispatcher: Arc<Dispatcher<Command>>,
+    commands: Arc<Commands>,
+    _command_registrations: [commands::Registration; 1],
+
     event_dispatcher: Arc<Dispatcher<Event>>,
     _dispatcher_worker: Worker,
 
@@ -124,33 +123,30 @@ struct App {
 
 impl App {
     fn new(proxy: EventLoopProxy<AppEvent>) -> App {
-        let command_dispatcher = Dispatcher::new();
+        let commands: Arc<Commands> = Default::default();
+
         let event_dispatcher = Dispatcher::new();
-
-        command_dispatcher.add_handler(move |command: &Command| match command {
-            Command::Exit => proxy
-                .send_event(AppEvent::Exit)
-                .expect("event loop is not exist anymore"),
-
-            _ => {}
-        });
 
         let game = Game::new(&event_dispatcher);
 
         let dispatcher_worker = {
-            let command_dispatcher = command_dispatcher.clone();
             let event_dispatcher = event_dispatcher.clone();
 
             Worker::spawn("Dispatcher", move |alive| {
                 while alive.load(Ordering::Relaxed) {
-                    command_dispatcher.dispatch();
                     event_dispatcher.dispatch();
                 }
             })
         };
 
         let app = App {
-            command_dispatcher,
+            _command_registrations: [commands.add("exit", move |_| {
+                let _ = proxy.send_event(AppEvent::Exit);
+
+                true
+            })],
+            commands,
+
             event_dispatcher,
             _dispatcher_worker: dispatcher_worker,
 
@@ -166,7 +162,7 @@ impl App {
 impl ApplicationHandler<AppEvent> for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let inner = Inner::new(
-            &self.command_dispatcher,
+            self.commands.clone(),
             &self.event_dispatcher,
             self.game.clone(),
             event_loop,

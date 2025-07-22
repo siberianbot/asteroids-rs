@@ -1,12 +1,14 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
-    sync::{Mutex, RwLock},
+    sync::{Arc, Mutex, RwLock},
 };
 
 use winit::{
     event::{ElementState, KeyEvent},
     keyboard::{KeyCode, PhysicalKey},
 };
+
+use crate::commands::Commands;
 
 /// Enumeration of input keys: contains keyboard (`Kbd...`), mouse (`Mouse...`), gamepad (`G`) keys
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -117,40 +119,24 @@ impl TryFrom<KeyCode> for Key {
     }
 }
 
-/// Type alias for input action delegate
-pub type Delegate = Box<dyn Fn(Key)>;
-
 /// Input manager
-#[derive(Default)]
 pub struct Manager {
-    actions: RwLock<BTreeMap<String, Delegate>>,
+    commands: Arc<Commands>,
     key_maps: RwLock<BTreeMap<Key, String>>,
     pressed: Mutex<BTreeSet<Key>>,
 }
 
 impl Manager {
-    /// Adds action
-    pub fn set_action<N, D>(&self, name: N, delegate: D)
-    where
-        N: Into<String>,
-        D: Fn(Key) + 'static,
-    {
-        let mut actions = self.actions.write().unwrap();
-
-        actions.insert(name.into(), Box::new(delegate));
+    /// Creates new instance of [Manager]
+    pub fn new(commands: Arc<Commands>) -> Manager {
+        Manager {
+            commands,
+            key_maps: Default::default(),
+            pressed: Default::default(),
+        }
     }
 
-    /// Removes action
-    pub fn remove_action<N>(&self, name: N)
-    where
-        N: Into<String>,
-    {
-        let mut actions = self.actions.write().unwrap();
-
-        actions.remove(&name.into());
-    }
-
-    /// Sets mapping between key and action
+    /// Sets mapping between key and command
     pub fn set_key_map<N>(&self, key: Key, name: N)
     where
         N: Into<String>,
@@ -194,21 +180,15 @@ impl Manager {
         }
     }
 
-    /// Dispatches all pressed keys to actions
+    /// Dispatches all pressed keys
     pub fn dispatch(&self) {
-        let actions = self.actions.read().unwrap();
         let pressed = self.pressed.lock().unwrap();
         let key_maps = self.key_maps.read().unwrap();
 
         pressed
             .iter()
             .copied()
-            .filter_map(|key| {
-                key_maps
-                    .get(&key)
-                    .and_then(|action| actions.get(action))
-                    .map(|action| (key, action.as_ref()))
-            })
-            .for_each(|(key, action)| action(key));
+            .filter_map(|key| key_maps.get(&key).map(|command| (key, command)))
+            .for_each(|(key, command)| self.commands.invoke(command, &[key.into()]));
     }
 }
