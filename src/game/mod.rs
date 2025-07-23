@@ -7,7 +7,7 @@ use crate::{
         logics::{AsteroidsRespawnGameLogicState, asteroids_respawn_game_logic},
         r#loop::{GameLoop, StatefulGameLogic},
         physics::Physics,
-        players::GamePlayers,
+        state::State,
     },
     worker::Worker,
 };
@@ -18,7 +18,7 @@ pub mod entities;
 mod logics;
 mod r#loop;
 mod physics;
-mod players;
+mod state;
 mod systems;
 
 /// Game infrastructure
@@ -32,7 +32,7 @@ impl Game {
     pub fn new(event_dispatcher: &Dispatcher<Event>) -> Arc<Game> {
         let ecs = ECS::new(event_dispatcher);
         let game_loop: Arc<GameLoop> = Default::default();
-        let game_players: Arc<GamePlayers> = Default::default();
+        let game_state: Arc<State> = State::new(event_dispatcher);
         let physics = Physics::new(event_dispatcher, ecs.clone());
 
         ecs.add_system(
@@ -66,7 +66,7 @@ impl Game {
         ecs.add_system(
             "entity_despawn_system",
             StatefulSystem::new(
-                systems::EntityDespawnSystemState::new(game_players.clone()),
+                systems::EntityDespawnSystemState::new(game_state.clone()),
                 systems::entity_despawn_system,
             ),
         );
@@ -76,7 +76,7 @@ impl Game {
         game_loop.add_logic(
             "asteroids_respawn_game_logic",
             StatefulGameLogic::new(
-                AsteroidsRespawnGameLogicState::new(ecs.clone(), game_players),
+                AsteroidsRespawnGameLogicState::new(ecs.clone(), game_state.clone()),
                 asteroids_respawn_game_logic,
             ),
         );

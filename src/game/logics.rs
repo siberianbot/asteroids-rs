@@ -7,26 +7,26 @@ use std::{
 use glam::Vec2;
 use rand::seq::IteratorRandom;
 
-use crate::{
-    game::ecs::ECS,
-    game::entities::{Asteroid, TransformComponent},
-    game::players::GamePlayers,
+use crate::game::{
+    ecs::ECS,
+    entities::{Asteroid, TransformComponent},
+    state::State,
 };
 
 /// State for [asteroids_respawn_game_logic]
 pub struct AsteroidsRespawnGameLogicState {
     passed: Mutex<f32>,
     ecs: Arc<ECS>,
-    players: Arc<GamePlayers>,
+    game_state: Arc<State>,
 }
 
 impl AsteroidsRespawnGameLogicState {
     /// Creates new instance of [AsteroidsRespawnGameLogicState]
-    pub fn new(ecs: Arc<ECS>, players: Arc<GamePlayers>) -> AsteroidsRespawnGameLogicState {
+    pub fn new(ecs: Arc<ECS>, game_state: Arc<State>) -> AsteroidsRespawnGameLogicState {
         AsteroidsRespawnGameLogicState {
             passed: Default::default(),
             ecs,
-            players,
+            game_state,
         }
     }
 }
@@ -60,15 +60,14 @@ pub fn asteroids_respawn_game_logic(elapsed: f32, state: &AsteroidsRespawnGameLo
     }
 
     let position = state
-        .players
-        .players
-        .read()
-        .unwrap()
-        .iter()
-        .filter_map(|player| {
-            entities
-                .get(player.spacecraft_id)
-                .map(|entity| entity.transform().position)
+        .game_state
+        .iter_players()
+        .filter_map(|(_, player)| {
+            player.spacecraft_id.and_then(|spacecraft_id| {
+                entities
+                    .get(spacecraft_id)
+                    .map(|entity| entity.transform().position)
+            })
         })
         .choose(&mut rand::rng())
         .unwrap_or_else(|| Vec2::ZERO);

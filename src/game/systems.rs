@@ -1,9 +1,6 @@
 use std::sync::Arc;
 
-use crate::game::{
-    ecs::SystemArgs,
-    players::{self, GamePlayers},
-};
+use crate::game::{ecs::SystemArgs, state::State};
 
 use super::entities::Entity;
 
@@ -89,13 +86,13 @@ pub fn asteroid_rotation_system(args: SystemArgs) {
 
 /// State for [entity_despawn_system]
 pub struct EntityDespawnSystemState {
-    players: Arc<GamePlayers>,
+    game_state: Arc<State>,
 }
 
 impl EntityDespawnSystemState {
     /// Creates new instance of [EntityDespawnSystemState]
-    pub fn new(players: Arc<GamePlayers>) -> EntityDespawnSystemState {
-        EntityDespawnSystemState { players }
+    pub fn new(game_state: Arc<State>) -> EntityDespawnSystemState {
+        EntityDespawnSystemState { game_state }
     }
 }
 
@@ -103,20 +100,26 @@ impl EntityDespawnSystemState {
 pub fn entity_despawn_system(args: SystemArgs, state: &EntityDespawnSystemState) {
     const MAX_DISTANCE: f32 = 150.0;
 
-    if args.entity.asteroid().is_none() {
+    let should_despawn = match args.entity {
+        Entity::Camera(_) | Entity::Spacecraft(_) => false,
+        _ => true,
+    };
+
+    if !should_despawn {
         return;
     }
 
-    let players = state.players.players.read().unwrap();
-
-    let any_near = players
-        .iter()
-        .filter_map(|player| {
-            args.get_entity(player.spacecraft_id).map(|spacecraft| {
-                args.entity
-                    .transform()
-                    .position
-                    .distance(spacecraft.transform().position)
+    let any_near = state
+        .game_state
+        .iter_players()
+        .filter_map(|(_, player)| {
+            player.spacecraft_id.and_then(|spacecraft_id| {
+                args.get_entity(spacecraft_id).map(|spacecraft| {
+                    args.entity
+                        .transform()
+                        .position
+                        .distance(spacecraft.transform().position)
+                })
             })
         })
         .any(|distance| distance < MAX_DISTANCE);
