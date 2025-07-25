@@ -4,7 +4,6 @@ use crate::{
     dispatch::{Dispatcher, Event},
     game::{
         ecs::{ECS, StatefulSystem, StatelessSystem},
-        logics::{AsteroidsRespawnGameLogicState, asteroids_respawn_game_logic},
         r#loop::{GameLoop, StatefulGameLogic},
         physics::Physics,
         state::State,
@@ -71,13 +70,19 @@ impl Game {
             ),
         );
 
-        // TODO: add init game logic
+        game_loop.add_logic(
+            "init_game_logic",
+            StatefulGameLogic::new(
+                logics::InitGameLogicState::new(game_state.clone()),
+                logics::init_game_logic,
+            ),
+        );
 
         game_loop.add_logic(
             "asteroids_respawn_game_logic",
             StatefulGameLogic::new(
-                AsteroidsRespawnGameLogicState::new(ecs.clone(), game_state.clone()),
-                asteroids_respawn_game_logic,
+                logics::AsteroidsRespawnGameLogicState::new(ecs.clone(), game_state.clone()),
+                logics::asteroids_respawn_game_logic,
             ),
         );
 

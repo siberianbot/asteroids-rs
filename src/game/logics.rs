@@ -1,7 +1,10 @@
 use std::{
     f32::consts::PI,
     ops::RangeInclusive,
-    sync::{Arc, Mutex},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 
 use glam::Vec2;
@@ -12,6 +15,35 @@ use crate::game::{
     entities::{Asteroid, TransformComponent},
     state::State,
 };
+
+/// State for [init_game_logic]
+pub struct InitGameLogicState {
+    game_state: Arc<State>,
+    initialized: AtomicBool,
+}
+
+impl InitGameLogicState {
+    /// Creates new instance of [InitGameLogicState]
+    pub fn new(game_state: Arc<State>) -> InitGameLogicState {
+        InitGameLogicState {
+            game_state,
+            initialized: Default::default(),
+        }
+    }
+}
+
+/// Game logic for single time initialization
+pub fn init_game_logic(_: f32, state: &InitGameLogicState) {
+    if state.initialized.load(Ordering::Relaxed) {
+        return;
+    }
+
+    state.initialized.store(true, Ordering::Relaxed);
+
+    state.game_state.new_player();
+
+    // TODO: camera initialization
+}
 
 /// State for [asteroids_respawn_game_logic]
 pub struct AsteroidsRespawnGameLogicState {
