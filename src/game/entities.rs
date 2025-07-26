@@ -1,6 +1,6 @@
 use std::{f32::consts::PI, ops::RangeInclusive};
 
-use glam::Vec2;
+use glam::{Mat4, Quat, Vec2, Vec3};
 
 use crate::game::physics::{Collider, TriangleCollider};
 
@@ -14,6 +14,17 @@ pub struct TransformComponent {
     pub position: Vec2,
     /// Rotation in radians
     pub rotation: f32,
+}
+
+impl TransformComponent {
+    /// Construct model matrix from [TransformComponent] data
+    pub fn to_model_matrix(&self) -> Mat4 {
+        Mat4::from_scale_rotation_translation(
+            Vec3::ONE,
+            Quat::from_rotation_z(-self.rotation),
+            Vec3::new(self.position.x, self.position.y, 0.0),
+        )
+    }
 }
 
 /// Applicable movement to an entity
@@ -129,6 +140,21 @@ pub struct Camera {
     pub transform: TransformComponent,
     /// Camera data
     pub camera: CameraComponent,
+}
+
+impl Camera {
+    /// Constructs view matrix from [Camera] data
+    pub fn to_view_matrix(&self) -> Mat4 {
+        Mat4::look_at_lh(
+            Vec3::new(
+                self.transform.position.x,
+                self.transform.position.y,
+                self.camera.distance,
+            ),
+            Vec3::new(self.transform.position.x, self.transform.position.y, 0.0),
+            Vec3::new(0.0, 1.0, 0.0),
+        )
+    }
 }
 
 /// Spacecraft entity
