@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
-use crate::game::{ecs::SystemArgs, state::State};
+use crate::{
+    game::{ecs::SystemArgs, state::State},
+    rendering,
+};
 
 use super::entities::Entity;
 
@@ -131,15 +134,13 @@ pub fn entity_despawn_system(args: SystemArgs, state: &EntityDespawnSystemState)
 
 /// State for [renderer_dispatch_system]
 pub struct RendererDispatchSystemState {
-    // TODO
+    renderer: Arc<rendering::Renderer>,
 }
 
 impl RendererDispatchSystemState {
     /// Creates new instance of [RendererDispatchSystemState]
-    pub fn new() -> RendererDispatchSystemState {
-        RendererDispatchSystemState {
-            // TODO
-        }
+    pub fn new(renderer: Arc<rendering::Renderer>) -> RendererDispatchSystemState {
+        RendererDispatchSystemState { renderer }
     }
 }
 
@@ -147,19 +148,23 @@ impl RendererDispatchSystemState {
 pub fn renderer_dispatch_system(args: SystemArgs, state: &RendererDispatchSystemState) {
     match args.entity {
         Entity::Camera(camera) => {
-            // TODO: send view data to renderer
+            state.renderer.dispatch_view(args.entity_id, camera.into());
         }
 
         Entity::Spacecraft(spacecraft) => {
-            // TODO: send entity data to renderer
+            state
+                .renderer
+                .dispatch_model(args.entity_id, spacecraft.into());
         }
 
         Entity::Asteroid(asteroid) => {
-            // TODO: send entity data to renderer
+            state
+                .renderer
+                .dispatch_model(args.entity_id, asteroid.into());
         }
 
         Entity::Bullet(bullet) => {
-            // TODO: send entity data to renderer
+            state.renderer.dispatch_model(args.entity_id, bullet.into());
         }
     }
 }

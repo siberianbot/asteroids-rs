@@ -8,6 +8,7 @@ use crate::{
         physics::Physics,
         state::State,
     },
+    rendering,
     worker::Worker,
 };
 
@@ -22,13 +23,15 @@ mod systems;
 
 /// Game infrastructure
 pub struct Game {
-    ecs: Arc<ECS>,
     _workers: [Worker; 3],
 }
 
 impl Game {
     /// Creates new instance of [Game] with default systems and game logics
-    pub fn new(event_dispatcher: &Dispatcher<Event>) -> Arc<Game> {
+    pub fn new(
+        event_dispatcher: &Dispatcher<Event>,
+        renderer: Arc<rendering::Renderer>,
+    ) -> Arc<Game> {
         let ecs = ECS::new(event_dispatcher);
         let game_loop: Arc<GameLoop> = Default::default();
         let game_state: Arc<State> = State::new(event_dispatcher);
@@ -57,7 +60,7 @@ impl Game {
         ecs.add_system(
             "renderer_dispatch_system",
             StatefulSystem::new(
-                systems::RendererDispatchSystemState::new(),
+                systems::RendererDispatchSystemState::new(renderer.clone()),
                 systems::renderer_dispatch_system,
             ),
         );
@@ -88,19 +91,12 @@ impl Game {
 
         let game = Game {
             _workers: [
-                ecs::spawn_worker(ecs.clone()),
+                ecs::spawn_worker(ecs),
                 r#loop::spawn_worker(game_loop),
                 physics::spawn_worker(physics),
             ],
-
-            ecs,
         };
 
         Arc::new(game)
-    }
-
-    /// Accesses to Entity-Component-System infrastructre within a game
-    pub fn ecs(&self) -> Arc<ECS> {
-        self.ecs.clone()
     }
 }

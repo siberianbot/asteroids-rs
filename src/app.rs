@@ -16,7 +16,7 @@ use crate::{
     dispatch::{Dispatcher, Event, Sender},
     game::Game,
     input::{self},
-    rendering::{backend::Backend, renderer::Renderer},
+    rendering::Renderer,
     worker::Worker,
 };
 
@@ -33,29 +33,28 @@ struct Inner {
     commands: Arc<Commands>,
     event_sender: Sender<Event>,
     input_manager: input::Manager,
+    game: Arc<Game>,
     window: Arc<Window>,
-    backend: Arc<Backend>,
-    _renderer: Renderer,
+    _renderer: Arc<Renderer>,
 }
 
 impl Inner {
     fn new(
         commands: Arc<Commands>,
         event_dispatcher: &Dispatcher<Event>,
-        game: Arc<Game>,
         event_loop: &ActiveEventLoop,
     ) -> Inner {
         let window = Inner::init_window(event_loop);
+        let renderer = Renderer::new();
 
-        let backend = Backend::new(event_dispatcher, event_loop, window.clone());
-        let renderer = Renderer::new(event_dispatcher, game.clone(), backend.clone());
+        let game = Game::new(event_dispatcher, renderer.clone());
 
         let inner = Inner {
             event_sender: event_dispatcher.create_sender(),
             input_manager: Self::init_input(commands.clone(), game.clone()),
             commands,
             window,
-            backend,
+            game,
             _renderer: renderer,
         };
 
@@ -116,8 +115,6 @@ struct App {
     event_dispatcher: Arc<Dispatcher<Event>>,
     _dispatcher_worker: Worker,
 
-    game: Arc<Game>,
-
     inner: Option<Inner>,
 }
 
@@ -126,8 +123,6 @@ impl App {
         let commands: Arc<Commands> = Default::default();
 
         let event_dispatcher = Dispatcher::new();
-
-        let game = Game::new(&event_dispatcher);
 
         let dispatcher_worker = {
             let event_dispatcher = event_dispatcher.clone();
@@ -150,8 +145,6 @@ impl App {
             event_dispatcher,
             _dispatcher_worker: dispatcher_worker,
 
-            game,
-
             inner: Default::default(),
         };
 
@@ -161,12 +154,7 @@ impl App {
 
 impl ApplicationHandler<AppEvent> for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        let inner = Inner::new(
-            self.commands.clone(),
-            &self.event_dispatcher,
-            self.game.clone(),
-            event_loop,
-        );
+        let inner = Inner::new(self.commands.clone(), &self.event_dispatcher, event_loop);
 
         self.inner = Some(inner);
     }

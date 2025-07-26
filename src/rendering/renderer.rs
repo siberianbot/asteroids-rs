@@ -132,10 +132,6 @@ impl Inner {
                 )
                 .expect("failed to set viewport");
 
-            let ecs = self.game.ecs();
-            let entities = ecs.read();
-            let mut render_data = self.render_data.lock().unwrap();
-
             // TODO
             // let camera_matrix = entities
             //     .get(self.game.camera_id())
@@ -334,18 +330,7 @@ impl Inner {
         Some(render_data)
     }
 
-    fn dispatch_entity_created(&self, entity_id: EntityId) {
-        let ecs = self.game.ecs();
-
-        let data = ecs
-            .read()
-            .get(entity_id)
-            .and_then(|entity| self.create_render_data(entity));
-
-        if let Some(data) = data {
-            self.render_data.lock().unwrap().insert(entity_id, data);
-        }
-    }
+    fn dispatch_entity_created(&self, entity_id: EntityId) {}
 
     fn dispatch_entity_destroyed(&self, entity_id: EntityId) {
         self.render_data.lock().unwrap().remove(&entity_id);
