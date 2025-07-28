@@ -2,7 +2,10 @@ use std::{f32::consts::PI, ops::RangeInclusive};
 
 use glam::{Mat4, Quat, Vec2, Vec3};
 
-use crate::game::physics::{Collider, TriangleCollider};
+use crate::{
+    assets::AssetRef,
+    game::physics::{Collider, TriangleCollider},
+};
 
 /// Identifier of entity
 pub type EntityId = usize;
@@ -133,6 +136,14 @@ pub struct BulletComponent {
     pub owner: EntityId,
 }
 
+/// Component with data for [crate::rendering::renderer::Renderer]
+pub struct RenderComponent {
+    /// Reference to mesh asset
+    pub mesh: AssetRef,
+    /// Reference to pipeline asset
+    pub pipeline: AssetRef,
+}
+
 /// Camera entity
 #[derive(Default)]
 pub struct Camera {
@@ -167,6 +178,8 @@ pub struct Spacecraft {
     pub collider: ColliderComponent,
     /// Spacecraft
     pub spacecraft: SpacecraftComponent,
+    /// Render data
+    pub render: RenderComponent,
 }
 
 impl Default for Spacecraft {
@@ -178,6 +191,10 @@ impl Default for Spacecraft {
                 colliders: vec![consts::SPACECRAFT_COLLIDER],
             },
             spacecraft: Default::default(),
+            render: RenderComponent {
+                mesh: consts::SPACECRAFT_MESH_ASSET_REF.into(),
+                pipeline: consts::ENTITY_PIPELINE_ASSET_REF.into(),
+            },
         }
     }
 }
@@ -192,6 +209,8 @@ pub struct Asteroid {
     pub collider: ColliderComponent,
     /// Asteroid data
     pub asteroid: AsteroidComponent,
+    /// Render data
+    pub render: RenderComponent,
 }
 
 impl Asteroid {
@@ -238,6 +257,16 @@ impl Asteroid {
                 .collect(),
         }
     }
+
+    /// INTERNAL: generate render component for asteroid
+    fn generate_render_() -> RenderComponent {
+        let random = rand::random::<u32>();
+
+        RenderComponent {
+            mesh: format!("{}{}", consts::ASTEROID_MESH_ASSET_REF_PREFIX, random).into(),
+            pipeline: consts::ENTITY_PIPELINE_ASSET_REF.into(),
+        }
+    }
 }
 
 impl Default for Asteroid {
@@ -254,6 +283,7 @@ impl Default for Asteroid {
             movement: Self::generate_movement_(),
             collider: Self::generate_collider_(&asteroid),
             asteroid,
+            render: Self::generate_render_(),
         }
     }
 }
@@ -268,6 +298,8 @@ pub struct Bullet {
     pub collider: ColliderComponent,
     /// Bullet data
     pub bullet: BulletComponent,
+    /// Render data
+    pub render: RenderComponent,
 }
 
 impl Default for Bullet {
@@ -280,6 +312,10 @@ impl Default for Bullet {
             },
             bullet: BulletComponent {
                 owner: EntityId::MAX,
+            },
+            render: RenderComponent {
+                mesh: consts::BULLET_MESH_ASSET_REF.into(),
+                pipeline: consts::ENTITY_PIPELINE_ASSET_REF.into(),
             },
         }
     }
@@ -443,6 +479,9 @@ pub mod consts {
 
     use crate::game::physics::{Collider, PointCollider, TriangleCollider};
 
+    /// Reference to general entity pipeline asset
+    pub const ENTITY_PIPELINE_ASSET_REF: &str = "pipelines/entity";
+
     /// Initial distance from object to camera center
     pub const CAMERA_INITIAL_DISTANCE: f32 = 4.0;
 
@@ -456,6 +495,15 @@ pub mod consts {
         ],
         radius: 0.5,
     });
+
+    /// Reference to spacecraft mesh asset
+    pub const SPACECRAFT_MESH_ASSET_REF: &str = "meshes/spacecraft";
+
+    /// Prefix of reference to asteroid mesh asset
+    pub const ASTEROID_MESH_ASSET_REF_PREFIX: &str = "meshes/asteroids/";
+
+    /// Reference to bullet mesh asset
+    pub const BULLET_MESH_ASSET_REF: &str = "meshes/bullet";
 
     /// Count of segments in single asteroid
     pub const ASTEROID_SEGMENTS_COUNT: usize = 8;

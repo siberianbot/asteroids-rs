@@ -1,8 +1,9 @@
 use std::sync::Arc;
 
-use glam::Mat4;
+use glam::{Mat4, Vec3};
 
 use crate::{
+    assets::AssetRef,
     game::entities::{Asteroid, Bullet, Camera, EntityId, Spacecraft},
 };
 
@@ -22,12 +23,18 @@ impl From<&Camera> for View {
 /// Model data to use in rendering
 pub struct Model {
     matrix: Mat4,
+    color: Vec3,
+    mesh: AssetRef,
+    pipeline: AssetRef,
 }
 
 impl From<&Spacecraft> for Model {
     fn from(value: &Spacecraft) -> Self {
         Self {
             matrix: value.transform.to_model_matrix(),
+            color: Vec3::new(0.1, 0.8, 0.1),
+            mesh: value.render.mesh.clone(),
+            pipeline: value.render.pipeline.clone(),
         }
     }
 }
@@ -36,6 +43,9 @@ impl From<&Asteroid> for Model {
     fn from(value: &Asteroid) -> Self {
         Self {
             matrix: value.transform.to_model_matrix(),
+            color: Vec3::new(0.6, 0.6, 0.6),
+            mesh: value.render.mesh.clone(),
+            pipeline: value.render.pipeline.clone(),
         }
     }
 }
@@ -44,6 +54,9 @@ impl From<&Bullet> for Model {
     fn from(value: &Bullet) -> Self {
         Self {
             matrix: value.transform.to_model_matrix(),
+            color: Vec3::new(1.0, 1.0, 1.0),
+            mesh: value.render.mesh.clone(),
+            pipeline: value.render.pipeline.clone(),
         }
     }
 }
