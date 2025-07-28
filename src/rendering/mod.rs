@@ -4,7 +4,7 @@ use glam::Mat4;
 
 use crate::game::entities::{Asteroid, Bullet, Camera, EntityId, Spacecraft};
 
-mod backend;
+pub mod backend;
 mod models;
 mod renderer;
 mod shaders;
