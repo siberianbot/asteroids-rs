@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::{
     game::{ecs::SystemArgs, state::State},
-    rendering,
+    rendering::renderer,
 };
 
 use super::entities::Entity;
@@ -134,12 +134,12 @@ pub fn entity_despawn_system(args: SystemArgs, state: &EntityDespawnSystemState)
 
 /// State for [renderer_dispatch_system]
 pub struct RendererDispatchSystemState {
-    renderer: Arc<rendering::Renderer>,
+    renderer: Arc<renderer::Renderer>,
 }
 
 impl RendererDispatchSystemState {
     /// Creates new instance of [RendererDispatchSystemState]
-    pub fn new(renderer: Arc<rendering::Renderer>) -> RendererDispatchSystemState {
+    pub fn new(renderer: Arc<renderer::Renderer>) -> RendererDispatchSystemState {
         RendererDispatchSystemState { renderer }
     }
 }

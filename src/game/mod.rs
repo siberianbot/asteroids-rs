@@ -8,7 +8,7 @@ use crate::{
         physics::Physics,
         state::State,
     },
-    rendering,
+    rendering::renderer,
     worker::Worker,
 };
 
@@ -30,7 +30,7 @@ impl Game {
     /// Creates new instance of [Game] with default systems and game logics
     pub fn new(
         event_dispatcher: &Dispatcher<Event>,
-        renderer: Arc<rendering::Renderer>,
+        renderer: Arc<renderer::Renderer>,
     ) -> Arc<Game> {
         let ecs = ECS::new(event_dispatcher);
         let game_loop: Arc<GameLoop> = Default::default();

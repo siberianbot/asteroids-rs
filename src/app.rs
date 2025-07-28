@@ -16,7 +16,7 @@ use crate::{
     dispatch::{Dispatcher, Event, Sender},
     game::Game,
     input::{self},
-    rendering::Renderer,
+    rendering::renderer::Renderer,
     worker::Worker,
 };
 
