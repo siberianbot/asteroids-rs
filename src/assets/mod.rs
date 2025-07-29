@@ -44,6 +44,26 @@ pub enum Asset {
     Pipeline(PipelineAsset),
 }
 
+impl Asset {
+    /// Returns reference to [MeshAsset] if [Asset] is a [Asset::Mesh] variant
+    pub fn as_mesh(&self) -> Option<&MeshAsset> {
+        if let Asset::Mesh(mesh) = self {
+            Some(mesh)
+        } else {
+            None
+        }
+    }
+
+    /// Returns reference to [PipelineAsset] if [Asset] is a [Asset::Pipeline] variant
+    pub fn as_pipeline(&self) -> Option<&PipelineAsset> {
+        if let Asset::Pipeline(pipeline) = self {
+            Some(pipeline)
+        } else {
+            None
+        }
+    }
+}
+
 impl From<MeshAsset> for Asset {
     fn from(value: MeshAsset) -> Self {
         Self::Mesh(value)

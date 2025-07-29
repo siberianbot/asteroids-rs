@@ -12,11 +12,15 @@ use winit::{
 };
 
 use crate::{
+    assets::Assets,
     commands::{self, Commands},
     dispatch::{Dispatcher, Event, Sender},
     game::Game,
     input::{self},
-    rendering::renderer::Renderer,
+    rendering::{
+        backend::Backend,
+        renderer::{self, Renderer},
+    },
     worker::Worker,
 };
 
@@ -35,7 +39,7 @@ struct Inner {
     input_manager: input::Manager,
     game: Arc<Game>,
     window: Arc<Window>,
-    _renderer: Arc<Renderer>,
+    _renderer_worker: Worker,
 }
 
 impl Inner {
@@ -45,7 +49,10 @@ impl Inner {
         event_loop: &ActiveEventLoop,
     ) -> Inner {
         let window = Inner::init_window(event_loop);
-        let renderer = Renderer::new();
+
+        let backend = Backend::new(event_dispatcher, event_loop, window.clone());
+        let assets = Assets::new(backend.clone());
+        let renderer = Renderer::new(event_dispatcher, backend.clone(), assets.clone());
 
         let game = Game::new(event_dispatcher, renderer.clone());
 
@@ -55,7 +62,7 @@ impl Inner {
             commands,
             window,
             game,
-            _renderer: renderer,
+            _renderer_worker: renderer::spawn_worker(renderer.clone()),
         };
 
         inner

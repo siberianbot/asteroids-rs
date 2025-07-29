@@ -148,23 +148,27 @@ impl RendererDispatchSystemState {
 pub fn renderer_dispatch_system(args: SystemArgs, state: &RendererDispatchSystemState) {
     match args.entity {
         Entity::Camera(camera) => {
-            state.renderer.dispatch_view(args.entity_id, camera.into());
+            state
+                .renderer
+                .dispatch::<renderer::ViewRenderData>(args.entity_id, camera.into());
         }
 
         Entity::Spacecraft(spacecraft) => {
             state
                 .renderer
-                .dispatch_model(args.entity_id, spacecraft.into());
+                .dispatch::<renderer::ModelRenderData>(args.entity_id, spacecraft.into());
         }
 
         Entity::Asteroid(asteroid) => {
             state
                 .renderer
-                .dispatch_model(args.entity_id, asteroid.into());
+                .dispatch::<renderer::ModelRenderData>(args.entity_id, asteroid.into());
         }
 
         Entity::Bullet(bullet) => {
-            state.renderer.dispatch_model(args.entity_id, bullet.into());
+            state
+                .renderer
+                .dispatch::<renderer::ModelRenderData>(args.entity_id, bullet.into());
         }
     }
 }

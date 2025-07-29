@@ -11,7 +11,7 @@ pub struct Vertex {
 
 #[derive(BufferContents)]
 #[repr(C)]
-pub struct Entity {
+pub struct Model {
     pub color: Vec3,
     pub matrix: Mat4,
 }
