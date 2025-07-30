@@ -5,18 +5,41 @@ use crate::{
     rendering::renderer,
 };
 
-use super::entities::Entity;
+use super::entities::{CameraTarget, Entity};
+
+/// State for [camera_sync_system]
+pub struct CameraSyncSystemState {
+    game_state: Arc<State>,
+}
+
+impl CameraSyncSystemState {
+    /// Creates new instance of [CameraSyncSystemState]
+    pub fn new(game_state: Arc<State>) -> CameraSyncSystemState {
+        CameraSyncSystemState { game_state }
+    }
+}
 
 /// Synchronizes camera position with target position
-pub fn camera_sync_system(args: SystemArgs) {
+pub fn camera_sync_system(args: SystemArgs, state: &CameraSyncSystemState) {
     let position = args
         .entity
         .camera()
         .filter(|camera| camera.follow)
-        .and_then(|camera| camera.target)
-        .and_then(|target| {
-            args.get_entity(target)
-                .map(|entity| entity.transform().position)
+        .and_then(|camera| match camera.target {
+            CameraTarget::None => None,
+
+            CameraTarget::Entity(entity_id) => args
+                .get_entity(entity_id)
+                .map(|entity| entity.transform().position),
+
+            CameraTarget::Player(player_id) => state
+                .game_state
+                .visit_player(&player_id, |player| player.spacecraft_id)
+                .flatten()
+                .and_then(|entity_id| {
+                    args.get_entity(entity_id)
+                        .map(|entity| entity.transform().position)
+                }),
         });
 
     if let Some(position) = position {

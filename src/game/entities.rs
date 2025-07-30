@@ -4,7 +4,10 @@ use glam::{Mat4, Quat, Vec2, Vec3};
 
 use crate::{
     assets::AssetRef,
-    game::physics::{Collider, TriangleCollider},
+    game::{
+        physics::{Collider, TriangleCollider},
+        state::PlayerId,
+    },
 };
 
 /// Identifier of entity
@@ -48,12 +51,24 @@ pub struct ColliderComponent {
     pub colliders: Vec<Collider>,
 }
 
+/// Enumeration of possible targets of camera
+#[derive(Default)]
+pub enum CameraTarget {
+    /// Camera has no target
+    #[default]
+    None,
+    /// Target is an entity
+    Entity(EntityId),
+    /// Target is a player
+    Player(PlayerId),
+}
+
 /// Component with camera data
 pub struct CameraComponent {
     /// Distance from camera center to object
     pub distance: f32,
-    /// Identifier of target entity
-    pub target: Option<EntityId>,
+    /// Camera target
+    pub target: CameraTarget,
     /// Determines should camera follow target entity
     pub follow: bool,
 }

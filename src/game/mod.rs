@@ -39,7 +39,10 @@ impl Game {
 
         ecs.add_system(
             "camera_sync_system",
-            Into::<StatelessSystem>::into(systems::camera_sync_system),
+            StatefulSystem::new(
+                systems::CameraSyncSystemState::new(game_state.clone()),
+                systems::camera_sync_system,
+            ),
         );
 
         ecs.add_system(
@@ -76,7 +79,7 @@ impl Game {
         game_loop.add_logic(
             "init_game_logic",
             StatefulGameLogic::new(
-                logics::InitGameLogicState::new(game_state.clone()),
+                logics::InitGameLogicState::new(renderer.clone(), ecs.clone(), game_state.clone()),
                 logics::init_game_logic,
             ),
         );
@@ -86,6 +89,14 @@ impl Game {
             StatefulGameLogic::new(
                 logics::AsteroidsRespawnGameLogicState::new(ecs.clone(), game_state.clone()),
                 logics::asteroids_respawn_game_logic,
+            ),
+        );
+
+        game_loop.add_logic(
+            "players_respawn_game_logic",
+            StatefulGameLogic::new(
+                logics::PlayersRespawnGameLogicState::new(ecs.clone(), game_state.clone()),
+                logics::players_respawn_game_logic,
             ),
         );
 

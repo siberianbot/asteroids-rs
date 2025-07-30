@@ -10,22 +10,35 @@ use std::{
 use glam::Vec2;
 use rand::seq::IteratorRandom;
 
-use crate::game::{
-    ecs::ECS,
-    entities::{Asteroid, TransformComponent},
-    state::State,
+use crate::{
+    game::{
+        ecs::ECS,
+        entities::{
+            Asteroid, Camera, CameraComponent, CameraTarget, Spacecraft, TransformComponent,
+        },
+        state::State,
+    },
+    rendering::renderer,
 };
 
 /// State for [init_game_logic]
 pub struct InitGameLogicState {
+    renderer: Arc<renderer::Renderer>,
+    ecs: Arc<ECS>,
     game_state: Arc<State>,
     initialized: AtomicBool,
 }
 
 impl InitGameLogicState {
     /// Creates new instance of [InitGameLogicState]
-    pub fn new(game_state: Arc<State>) -> InitGameLogicState {
+    pub fn new(
+        renderer: Arc<renderer::Renderer>,
+        ecs: Arc<ECS>,
+        game_state: Arc<State>,
+    ) -> InitGameLogicState {
         InitGameLogicState {
+            renderer,
+            ecs,
             game_state,
             initialized: Default::default(),
         }
@@ -40,9 +53,18 @@ pub fn init_game_logic(_: f32, state: &InitGameLogicState) {
 
     state.initialized.store(true, Ordering::Relaxed);
 
-    state.game_state.new_player();
+    let player_id = state.game_state.new_player();
 
-    // TODO: camera initialization
+    let camera = Camera {
+        camera: CameraComponent {
+            target: CameraTarget::Player(player_id),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let camera_id = state.ecs.write().create(camera);
+
+    state.renderer.set_view(Some(camera_id));
 }
 
 /// State for [asteroids_respawn_game_logic]
@@ -117,4 +139,36 @@ pub fn asteroids_respawn_game_logic(elapsed: f32, state: &AsteroidsRespawnGameLo
     };
 
     entities.create(asteroid);
+}
+
+/// State for [players_respawn_game_logic]
+pub struct PlayersRespawnGameLogicState {
+    ecs: Arc<ECS>,
+    game_state: Arc<State>,
+}
+
+impl PlayersRespawnGameLogicState {
+    /// Creates new instance for [PlayersRespawnGameLogicState]
+    pub fn new(ecs: Arc<ECS>, game_state: Arc<State>) -> PlayersRespawnGameLogicState {
+        PlayersRespawnGameLogicState { ecs, game_state }
+    }
+}
+
+/// Game logic for respawning players
+pub fn players_respawn_game_logic(elapsed: f32, state: &PlayersRespawnGameLogicState) {
+    state
+        .game_state
+        .iter_players_mut()
+        .filter(|(_, player)| player.spacecraft_id.is_none())
+        .for_each(|(_, player)| {
+            player.respawn_timer -= elapsed;
+
+            if player.respawn_timer > 0.0 {
+                return;
+            }
+
+            let spacecraft_id = state.ecs.write().create(Spacecraft::default());
+
+            player.spacecraft_id = Some(spacecraft_id);
+        });
 }

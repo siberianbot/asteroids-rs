@@ -2,7 +2,7 @@ use std::{
     collections::BTreeMap,
     ptr::NonNull,
     sync::{
-        Arc, RwLock, RwLockReadGuard,
+        Arc, RwLock, RwLockReadGuard, RwLockWriteGuard,
         atomic::{AtomicUsize, Ordering},
     },
 };
@@ -28,7 +28,7 @@ pub struct Player {
 /// Type alias for player identifier
 pub type PlayerId = usize;
 
-/// Iterator over list of players
+/// Read-only iterator over list of players
 pub struct PlayerIter<'a> {
     lock: RwLockReadGuard<'a, BTreeMap<PlayerId, Player>>,
     player_id: PlayerId,
@@ -46,6 +46,35 @@ impl<'a> Iterator for PlayerIter<'a> {
             let tuple = self.lock.get(&player_id).map(|player| unsafe {
                 // HACK this iterator have a lock to container, references are valid 'till iterator lifetime
                 (player_id, NonNull::from(player).as_ref())
+            });
+
+            if tuple.is_some() {
+                return tuple;
+            }
+        }
+
+        None
+    }
+}
+
+/// Iterator over list of players, allows mutability
+pub struct PlayerIterMut<'a> {
+    lock: RwLockWriteGuard<'a, BTreeMap<PlayerId, Player>>,
+    player_id: PlayerId,
+    max_player_id: PlayerId,
+}
+
+impl<'a> Iterator for PlayerIterMut<'a> {
+    type Item = (PlayerId, &'a mut Player);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while self.player_id <= self.max_player_id {
+            let player_id = self.player_id;
+            self.player_id += 1;
+
+            let tuple = self.lock.get(&player_id).map(|player| unsafe {
+                // HACK this iterator have a lock to container, references are valid 'till iterator lifetime
+                (player_id, NonNull::from(player).as_mut())
             });
 
             if tuple.is_some() {
@@ -85,7 +114,7 @@ impl State {
         state
     }
 
-    /// Returns iterator over list of players
+    /// Returns read-only iterator over list of players
     pub fn iter_players(&self) -> PlayerIter {
         let lock = self.players.read().unwrap();
 
@@ -102,6 +131,35 @@ impl State {
 
             lock,
         }
+    }
+
+    /// Returns iterator over list of players, allows mutability
+    pub fn iter_players_mut(&self) -> PlayerIterMut {
+        let lock = self.players.write().unwrap();
+
+        PlayerIterMut {
+            player_id: lock
+                .first_key_value()
+                .map(|(player_id, _)| *player_id)
+                .unwrap_or(0),
+
+            max_player_id: lock
+                .last_key_value()
+                .map(|(player_id, _)| *player_id)
+                .unwrap_or(0),
+
+            lock,
+        }
+    }
+
+    /// Visits player by its [PlayerId]
+    pub fn visit_player<V, R>(&self, player_id: &PlayerId, visitor: V) -> Option<R>
+    where
+        V: FnOnce(&Player) -> R,
+    {
+        let players = self.players.read().unwrap();
+
+        players.get(player_id).map(visitor)
     }
 
     /// Creates new player and returns its [PlayerId]
