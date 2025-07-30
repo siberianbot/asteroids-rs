@@ -54,7 +54,7 @@ impl Inner {
         let assets = Assets::new(backend.clone());
         let renderer = Renderer::new(event_dispatcher, backend.clone(), assets.clone());
 
-        let game = Game::new(event_dispatcher, renderer.clone());
+        let game = Game::new(event_dispatcher, assets.clone(), renderer.clone());
 
         let inner = Inner {
             event_sender: event_dispatcher.create_sender(),

@@ -16,6 +16,8 @@ use crate::{
     rendering::backend::{Backend, ShaderStage},
 };
 
+pub mod models;
+pub mod shaders;
 pub mod types;
 
 /// Mesh asset data
@@ -111,18 +113,18 @@ impl IntoAsset for MeshAssetDef {
     }
 }
 
-/// Trait alias for shader factory function
-pub trait ShaderFactory:
-    FnOnce(Arc<Device>) -> Result<Arc<ShaderModule>, Validated<VulkanError>>
-{
-}
+/// Type alias for pipeline shader
+pub type PipelineShader = (
+    ShaderStage,
+    Box<dyn FnOnce(Arc<Device>) -> Result<Arc<ShaderModule>, Validated<VulkanError>>>,
+);
 
 /// Definition of [PipelineAsset]
 pub struct PipelineAssetDef {
     /// Primitive topology
     pub topology: PrimitiveTopology,
     /// List of shaders
-    pub shaders: Vec<(ShaderStage, Box<dyn ShaderFactory>)>,
+    pub shaders: Vec<PipelineShader>,
 }
 
 impl IntoAsset for PipelineAssetDef {

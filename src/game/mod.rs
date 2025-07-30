@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
+    assets,
     dispatch::{Dispatcher, Event},
     game::{
         ecs::{ECS, StatefulSystem, StatelessSystem},
@@ -30,6 +31,7 @@ impl Game {
     /// Creates new instance of [Game] with default systems and game logics
     pub fn new(
         event_dispatcher: &Dispatcher<Event>,
+        assets: Arc<assets::Assets>,
         renderer: Arc<renderer::Renderer>,
     ) -> Arc<Game> {
         let ecs = ECS::new(event_dispatcher);
@@ -79,7 +81,12 @@ impl Game {
         game_loop.add_logic(
             "init_game_logic",
             StatefulGameLogic::new(
-                logics::InitGameLogicState::new(renderer.clone(), ecs.clone(), game_state.clone()),
+                logics::InitGameLogicState::new(
+                    assets.clone(),
+                    renderer.clone(),
+                    ecs.clone(),
+                    game_state.clone(),
+                ),
                 logics::init_game_logic,
             ),
         );
@@ -87,7 +94,11 @@ impl Game {
         game_loop.add_logic(
             "asteroids_respawn_game_logic",
             StatefulGameLogic::new(
-                logics::AsteroidsRespawnGameLogicState::new(ecs.clone(), game_state.clone()),
+                logics::AsteroidsRespawnGameLogicState::new(
+                    assets.clone(),
+                    ecs.clone(),
+                    game_state.clone(),
+                ),
                 logics::asteroids_respawn_game_logic,
             ),
         );

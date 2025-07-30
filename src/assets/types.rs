@@ -2,7 +2,7 @@ use glam::Vec2;
 use vulkano::{buffer::BufferContents, pipeline::graphics::vertex_input::Vertex as VertexTrait};
 
 /// Type of vertex
-#[derive(BufferContents, VertexTrait)]
+#[derive(Default, BufferContents, VertexTrait)]
 #[repr(C)]
 pub struct Vertex {
     /// Position of vertex

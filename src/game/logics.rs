@@ -1,5 +1,6 @@
 use std::{
     f32::consts::PI,
+    iter::once,
     ops::RangeInclusive,
     sync::{
         Arc, Mutex,
@@ -9,20 +10,17 @@ use std::{
 
 use glam::Vec2;
 use rand::seq::IteratorRandom;
+use vulkano::pipeline::graphics::input_assembly::PrimitiveTopology;
 
 use crate::{
-    game::{
-        ecs::ECS,
-        entities::{
-            Asteroid, Camera, CameraComponent, CameraTarget, Spacecraft, TransformComponent,
-        },
-        state::State,
-    },
-    rendering::renderer,
+    assets::{self, MeshAssetDef, types::Vertex},
+    game::{ecs::ECS, entities, state::State},
+    rendering::{self, renderer},
 };
 
 /// State for [init_game_logic]
 pub struct InitGameLogicState {
+    assets: Arc<assets::Assets>,
     renderer: Arc<renderer::Renderer>,
     ecs: Arc<ECS>,
     game_state: Arc<State>,
@@ -32,11 +30,13 @@ pub struct InitGameLogicState {
 impl InitGameLogicState {
     /// Creates new instance of [InitGameLogicState]
     pub fn new(
+        assets: Arc<assets::Assets>,
         renderer: Arc<renderer::Renderer>,
         ecs: Arc<ECS>,
         game_state: Arc<State>,
     ) -> InitGameLogicState {
         InitGameLogicState {
+            assets,
             renderer,
             ecs,
             game_state,
@@ -53,11 +53,44 @@ pub fn init_game_logic(_: f32, state: &InitGameLogicState) {
 
     state.initialized.store(true, Ordering::Relaxed);
 
+    state.assets.load(
+        entities::consts::ENTITY_PIPELINE_ASSET_REF.into(),
+        assets::PipelineAssetDef {
+            topology: PrimitiveTopology::TriangleList,
+            shaders: vec![
+                (
+                    rendering::backend::ShaderStage::Vertex,
+                    Box::new(assets::shaders::entity::vs::load),
+                ),
+                (
+                    rendering::backend::ShaderStage::Fragment,
+                    Box::new(assets::shaders::entity::fs::load),
+                ),
+            ],
+        },
+    );
+
+    state.assets.load(
+        entities::consts::SPACECRAFT_MESH_ASSET_REF.into(),
+        assets::MeshAssetDef {
+            vertices: assets::models::spacecraft::VERTICES.into(),
+            indices: assets::models::spacecraft::INDICES.into(),
+        },
+    );
+
+    state.assets.load(
+        entities::consts::BULLET_MESH_ASSET_REF.into(),
+        assets::MeshAssetDef {
+            vertices: assets::models::bullet::VERTICES.into(),
+            indices: assets::models::bullet::INDICES.into(),
+        },
+    );
+
     let player_id = state.game_state.new_player();
 
-    let camera = Camera {
-        camera: CameraComponent {
-            target: CameraTarget::Player(player_id),
+    let camera = entities::Camera {
+        camera: entities::CameraComponent {
+            target: entities::CameraTarget::Player(player_id),
             ..Default::default()
         },
         ..Default::default()
@@ -70,15 +103,21 @@ pub fn init_game_logic(_: f32, state: &InitGameLogicState) {
 /// State for [asteroids_respawn_game_logic]
 pub struct AsteroidsRespawnGameLogicState {
     passed: Mutex<f32>,
+    assets: Arc<assets::Assets>,
     ecs: Arc<ECS>,
     game_state: Arc<State>,
 }
 
 impl AsteroidsRespawnGameLogicState {
     /// Creates new instance of [AsteroidsRespawnGameLogicState]
-    pub fn new(ecs: Arc<ECS>, game_state: Arc<State>) -> AsteroidsRespawnGameLogicState {
+    pub fn new(
+        assets: Arc<assets::Assets>,
+        ecs: Arc<ECS>,
+        game_state: Arc<State>,
+    ) -> AsteroidsRespawnGameLogicState {
         AsteroidsRespawnGameLogicState {
             passed: Default::default(),
+            assets,
             ecs,
             game_state,
         }
@@ -130,13 +169,38 @@ pub fn asteroids_respawn_game_logic(elapsed: f32, state: &AsteroidsRespawnGameLo
     let rotation = rand::random_range(ROTATION_RANGE);
     let position = position + distance * Vec2::ONE.rotate(rotation.sin_cos().into());
 
-    let asteroid = Asteroid {
-        transform: TransformComponent {
+    let asteroid = entities::Asteroid {
+        transform: entities::TransformComponent {
             position,
             ..Default::default()
         },
         ..Default::default()
     };
+
+    let asteroid_mesh_def = MeshAssetDef {
+        vertices: once(Vertex::default())
+            .chain(
+                asteroid
+                    .asteroid
+                    .body
+                    .iter()
+                    .copied()
+                    .map(|vertex| Vertex { position: vertex }),
+            )
+            .collect(),
+
+        indices: (1..=entities::consts::ASTEROID_SEGMENTS_COUNT)
+            .flat_map(|index| {
+                let next_index = (index + 1) % entities::consts::ASTEROID_SEGMENTS_COUNT;
+
+                [0, index as u32, next_index.max(1) as u32]
+            })
+            .collect(),
+    };
+
+    state
+        .assets
+        .load(asteroid.render.mesh.clone(), asteroid_mesh_def);
 
     entities.create(asteroid);
 }
@@ -167,7 +231,7 @@ pub fn players_respawn_game_logic(elapsed: f32, state: &PlayersRespawnGameLogicS
                 return;
             }
 
-            let spacecraft_id = state.ecs.write().create(Spacecraft::default());
+            let spacecraft_id = state.ecs.write().create(entities::Spacecraft::default());
 
             player.spacecraft_id = Some(spacecraft_id);
         });
