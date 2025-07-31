@@ -13,7 +13,7 @@ use winit::{
 
 use crate::{
     assets::Assets,
-    commands::{self, Commands},
+    commands::{self, Commands, StatefulCommand},
     dispatch::{Dispatcher, Event, Sender},
     game::Game,
     input::{self},
@@ -28,10 +28,6 @@ use crate::{
 enum AppEvent {
     Exit,
 }
-
-pub const CAMERA_MIN_DISTANCE: f32 = 1.0;
-pub const CAMERA_MAX_DISTANCE: f32 = 32.0;
-pub const CAMERA_DISTANCE_MULTIPLIER: f32 = 2.0;
 
 struct Inner {
     commands: Arc<Commands>,
@@ -54,7 +50,12 @@ impl Inner {
         let assets = Assets::new(backend.clone());
         let renderer = Renderer::new(event_dispatcher, backend.clone(), assets.clone());
 
-        let game = Game::new(event_dispatcher, assets.clone(), renderer.clone());
+        let game = Game::new(
+            event_dispatcher,
+            commands.clone(),
+            assets.clone(),
+            renderer.clone(),
+        );
 
         let inner = Inner {
             event_sender: event_dispatcher.create_sender(),
@@ -142,11 +143,14 @@ impl App {
         };
 
         let app = App {
-            _command_registrations: [commands.add("exit", move |_| {
-                let _ = proxy.send_event(AppEvent::Exit);
+            _command_registrations: [commands.add(
+                "exit",
+                StatefulCommand::new(proxy, |_, proxy| {
+                    let _ = proxy.send_event(AppEvent::Exit);
 
-                true
-            })],
+                    true
+                }),
+            )],
             commands,
 
             event_dispatcher,

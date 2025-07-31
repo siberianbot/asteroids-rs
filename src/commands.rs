@@ -21,33 +21,48 @@ impl From<Key> for Arg {
     }
 }
 
-/// A command delegate
-pub struct Command {
-    delegate: Box<dyn Fn(&[Arg]) -> bool>,
+/// Trait of a command
+pub trait Command: Send + Sync {
+    /// Invokes command with specified list of arguments
+    fn invoke(&self, args: &[Arg]) -> bool;
 }
 
-impl Command {
-    /// INTERNAL: invokes command with specified list of arguments
-    fn invoke(&self, args: &[Arg]) -> bool {
-        (self.delegate)(args)
-    }
+/// Stateful [Command] implementation
+pub struct StatefulCommand<S> {
+    state: S,
+    delegate: Box<dyn Fn(&[Arg], &S) -> bool>,
 }
 
-impl<F> From<F> for Command
-where
-    F: Fn(&[Arg]) -> bool + 'static,
-{
-    fn from(value: F) -> Self {
-        Self {
-            delegate: Box::new(value),
+impl<S> StatefulCommand<S> {
+    /// Creates new instance of [StatefulCommand] with some predefined state
+    pub fn new<F>(state: S, delegate: F) -> StatefulCommand<S>
+    where
+        F: Fn(&[Arg], &S) -> bool + 'static,
+    {
+        StatefulCommand {
+            state,
+            delegate: Box::new(delegate),
         }
     }
 }
 
+impl<S> Command for StatefulCommand<S>
+where
+    S: Send + Sync,
+{
+    fn invoke(&self, args: &[Arg]) -> bool {
+        (self.delegate)(args, &self.state)
+    }
+}
+
+unsafe impl<S> Send for StatefulCommand<S> where S: Send + Sync {}
+
+unsafe impl<S> Sync for StatefulCommand<S> where S: Send + Sync {}
+
 /// INTERNAL: command identifier type alias
 type CommandId = usize;
 /// INTERNAL: list of commands
-type CommandList = BTreeMap<CommandId, Command>;
+type CommandList = BTreeMap<CommandId, Box<dyn Command>>;
 
 /// INTERNAL: command infrastructure state
 #[derive(Default)]
@@ -58,13 +73,16 @@ struct Inner {
 
 impl Inner {
     /// INTERNAL: adds command
-    fn add(&self, name: String, command: Command) -> CommandId {
+    fn add<C>(&self, name: String, command: C) -> CommandId
+    where
+        C: Command + 'static,
+    {
         let mut commands = self.commands.write().unwrap();
         let command_list = commands.entry(name).or_default();
 
         let id = self.id_counter.fetch_add(1, Ordering::Relaxed);
 
-        command_list.insert(id, command.into());
+        command_list.insert(id, Box::new(command));
 
         id
     }
@@ -117,14 +135,14 @@ impl Commands {
     pub fn add<N, C>(&self, name: N, command: C) -> Registration
     where
         N: Into<String>,
-        C: Fn(&[Arg]) -> bool + 'static,
+        C: Command + 'static,
     {
         let name = name.into();
 
         Registration {
             inner: self.inner.clone(),
             name: name.clone(),
-            command_id: self.inner.add(name, command.into()),
+            command_id: self.inner.add(name, command),
         }
     }
 

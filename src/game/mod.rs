@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use crate::{
     assets,
+    commands::{Commands, Registration, StatefulCommand},
     dispatch::{Dispatcher, Event},
     game::{
         ecs::{ECS, StatefulSystem, StatelessSystem},
@@ -16,6 +17,7 @@ use crate::{
 pub mod ecs;
 pub mod entities;
 
+mod commands;
 mod logics;
 mod r#loop;
 mod physics;
@@ -24,6 +26,7 @@ mod systems;
 
 /// Game infrastructure
 pub struct Game {
+    _commands: [Registration; 3],
     _workers: [Worker; 3],
 }
 
@@ -31,6 +34,7 @@ impl Game {
     /// Creates new instance of [Game] with default systems and game logics
     pub fn new(
         event_dispatcher: &Dispatcher<Event>,
+        commands: Arc<Commands>,
         assets: Arc<assets::Assets>,
         renderer: Arc<renderer::Renderer>,
     ) -> Arc<Game> {
@@ -111,7 +115,34 @@ impl Game {
             ),
         );
 
+        let camera_command_state =
+            commands::camera::CameraCommandState::new(game_state.clone(), ecs.clone());
+
         let game = Game {
+            _commands: [
+                commands.add(
+                    "camera_follow",
+                    StatefulCommand::new(
+                        camera_command_state.clone(),
+                        commands::camera::camera_follow_command,
+                    ),
+                ),
+                commands.add(
+                    "camera_zoom_out",
+                    StatefulCommand::new(
+                        camera_command_state.clone(),
+                        commands::camera::camera_zoom_in_command,
+                    ),
+                ),
+                commands.add(
+                    "camera_zoom_in",
+                    StatefulCommand::new(
+                        camera_command_state.clone(),
+                        commands::camera::camera_zoom_out_command,
+                    ),
+                ),
+            ],
+
             _workers: [
                 ecs::spawn_worker(ecs),
                 r#loop::spawn_worker(game_loop),

@@ -98,6 +98,7 @@ pub fn init_game_logic(_: f32, state: &InitGameLogicState) {
     let camera_id = state.ecs.write().create(camera);
 
     state.renderer.set_view(Some(camera_id));
+    state.game_state.set_camera(Some(camera_id));
 }
 
 /// State for [asteroids_respawn_game_logic]
