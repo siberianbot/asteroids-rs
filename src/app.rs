@@ -88,6 +88,10 @@ impl Inner {
         manager.set_key_map(input::Key::KbdF, "camera_follow");
         manager.set_key_map(input::Key::KbdQ, "camera_zoom_out");
         manager.set_key_map(input::Key::KbdE, "camera_zoom_in");
+        manager.set_key_map(input::Key::KbdW, "player_forward");
+        manager.set_key_map(input::Key::KbdS, "player_backward");
+        manager.set_key_map(input::Key::KbdA, "player_incline_left");
+        manager.set_key_map(input::Key::KbdD, "player_incline_right");
 
         manager
     }

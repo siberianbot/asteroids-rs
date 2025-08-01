@@ -1,9 +1,16 @@
 use std::{
+    f32::consts::PI,
     ops::{Div, Mul},
     sync::{Arc, RwLock},
 };
 
-use crate::game::{ecs::ECS, entities::EntityId, players::PlayerId};
+use glam::Vec2;
+
+use crate::game::{
+    ecs::ECS,
+    entities::EntityId,
+    players::{PlayerId, Players},
+};
 
 /// [crate::game::entities::Camera] zoom direction
 pub enum CameraZoomDirection {
@@ -11,9 +18,22 @@ pub enum CameraZoomDirection {
     Out,
 }
 
+/// [crate::game::entities::Spacecraft] acceleration direction
+pub enum SpacecraftAccelerationDirection {
+    Forward,
+    Backward,
+}
+
+/// [crate::game::entities::Spacecraft] incline direction
+pub enum SpacecraftInclineDirection {
+    Left,
+    Right,
+}
+
 /// Controller: dispatches commands to entities and players
 pub struct Controller {
     ecs: Arc<ECS>,
+    players: Arc<Players>,
 
     player_id: RwLock<Option<PlayerId>>,
     camera_id: RwLock<Option<EntityId>>,
@@ -21,9 +41,10 @@ pub struct Controller {
 
 impl Controller {
     /// Creates new instance of [Controller]
-    pub fn new(ecs: Arc<ECS>) -> Arc<Controller> {
+    pub fn new(ecs: Arc<ECS>, players: Arc<Players>) -> Arc<Controller> {
         let controller = Controller {
             ecs,
+            players,
             player_id: Default::default(),
             camera_id: Default::default(),
         };
@@ -69,6 +90,63 @@ impl Controller {
                     camera.distance = camera.distance.clamp(MIN_DISTANCE, MAX_DISTANCE);
                 }
             });
+        }
+    }
+
+    /// Gives acceleration to current player's spacecraft
+    pub fn player_accelerate(&self, direction: SpacecraftAccelerationDirection) {
+        const ACCELERATION: f32 = 2.0;
+        const DECELERATION: f32 = -1.0;
+
+        if let Some(player_id) = self.player_id.read().unwrap().clone() {
+            self.players
+                .visit_player(&player_id, |player| player.spacecraft_id)
+                .flatten()
+                .and_then(|spacecraft_id| {
+                    self.ecs.write().modify(spacecraft_id, |entity| {
+                        if entity.spacecraft().is_none() {
+                            return;
+                        }
+
+                        let mut acceleration =
+                            Vec2::ONE.rotate(entity.transform().rotation.sin_cos().into());
+
+                        acceleration *= match direction {
+                            SpacecraftAccelerationDirection::Forward => ACCELERATION,
+                            SpacecraftAccelerationDirection::Backward => DECELERATION,
+                        };
+
+                        if let Some(movement) = entity.movement_mut() {
+                            movement.acceleration = acceleration;
+                        }
+                    })
+                });
+        }
+    }
+
+    /// Inclines current player's spacecraft
+    pub fn player_incline(&self, direction: SpacecraftInclineDirection) {
+        const ROTATION_VELOCITY: f32 = 0.01 * PI;
+
+        if let Some(player_id) = self.player_id.read().unwrap().clone() {
+            self.players
+                .visit_player(&player_id, |player| player.spacecraft_id)
+                .flatten()
+                .and_then(|spacecraft_id| {
+                    self.ecs.write().modify(spacecraft_id, |entity| {
+                        if entity.spacecraft().is_none() {
+                            return;
+                        }
+
+                        let change = ROTATION_VELOCITY
+                            * match direction {
+                                SpacecraftInclineDirection::Left => 1.0,
+                                SpacecraftInclineDirection::Right => -1.0,
+                            };
+
+                        entity.transform_mut().rotation += change;
+                    })
+                });
         }
     }
 }

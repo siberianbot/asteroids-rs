@@ -28,7 +28,7 @@ mod systems;
 
 /// Game infrastructure
 pub struct Game {
-    _commands: [Registration; 3],
+    _commands: [Registration; 7],
     _workers: [Worker; 3],
 }
 
@@ -43,7 +43,7 @@ impl Game {
         let ecs = ECS::new(event_dispatcher);
         let r#loop: Arc<Loop> = Default::default();
         let players = Players::new(event_dispatcher);
-        let controller = Controller::new(ecs.clone());
+        let controller = Controller::new(ecs.clone(), players.clone());
         let physics = Physics::new(event_dispatcher, ecs.clone());
 
         ecs.add_system(
@@ -132,6 +132,25 @@ impl Game {
                 commands.add(
                     "camera_zoom_in",
                     StatefulCommand::new(controller.clone(), commands::camera_zoom_in_command),
+                ),
+                commands.add(
+                    "player_forward",
+                    StatefulCommand::new(controller.clone(), commands::player_forward_command),
+                ),
+                commands.add(
+                    "player_backward",
+                    StatefulCommand::new(controller.clone(), commands::player_backward_command),
+                ),
+                commands.add(
+                    "player_incline_left",
+                    StatefulCommand::new(controller.clone(), commands::player_incline_left_command),
+                ),
+                commands.add(
+                    "player_incline_right",
+                    StatefulCommand::new(
+                        controller.clone(),
+                        commands::player_incline_right_command,
+                    ),
                 ),
             ],
 
