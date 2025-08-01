@@ -124,10 +124,8 @@ impl Controller {
         }
     }
 
-    /// Inclines current player's spacecraft
-    pub fn player_incline(&self, direction: SpacecraftInclineDirection) {
-        const ROTATION_VELOCITY: f32 = 0.01 * PI;
-
+    /// Discards acceleration of current player's spacecraft
+    pub fn player_stop_accelerate(&self) {
         if let Some(player_id) = self.player_id.read().unwrap().clone() {
             self.players
                 .visit_player(&player_id, |player| player.spacecraft_id)
@@ -138,13 +136,47 @@ impl Controller {
                             return;
                         }
 
-                        let change = ROTATION_VELOCITY
-                            * match direction {
-                                SpacecraftInclineDirection::Left => 1.0,
-                                SpacecraftInclineDirection::Right => -1.0,
-                            };
+                        if let Some(movement) = entity.movement_mut() {
+                            movement.acceleration = Vec2::ZERO;
+                        }
+                    })
+                });
+        }
+    }
 
-                        entity.transform_mut().rotation += change;
+    /// Inclines current player's spacecraft
+    pub fn player_incline(&self, direction: SpacecraftInclineDirection) {
+        const ROTATION_VELOCITY: f32 = PI;
+
+        if let Some(player_id) = self.player_id.read().unwrap().clone() {
+            self.players
+                .visit_player(&player_id, |player| player.spacecraft_id)
+                .flatten()
+                .and_then(|spacecraft_id| {
+                    self.ecs.write().modify(spacecraft_id, |entity| {
+                        entity.spacecraft_mut().map(|spacecraft| {
+                            spacecraft.rotation_velocity = ROTATION_VELOCITY
+                                * match direction {
+                                    SpacecraftInclineDirection::Left => 1.0,
+                                    SpacecraftInclineDirection::Right => -1.0,
+                                }
+                        });
+                    })
+                });
+        }
+    }
+
+    /// Discards incline of current player's spacecraft
+    pub fn player_stop_incline(&self) {
+        if let Some(player_id) = self.player_id.read().unwrap().clone() {
+            self.players
+                .visit_player(&player_id, |player| player.spacecraft_id)
+                .flatten()
+                .and_then(|spacecraft_id| {
+                    self.ecs.write().modify(spacecraft_id, |entity| {
+                        entity
+                            .spacecraft_mut()
+                            .map(|spacecraft| spacecraft.rotation_velocity = 0.0);
                     })
                 });
         }

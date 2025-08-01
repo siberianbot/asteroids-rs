@@ -88,6 +88,8 @@ impl Default for CameraComponent {
 pub struct SpacecraftComponent {
     /// Reloading cooldown
     pub cooldown: f32,
+    /// Rotation velocity
+    pub rotation_velocity: f32,
 }
 
 /// Component with asteroid data

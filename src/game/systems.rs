@@ -99,6 +99,17 @@ pub fn spacecraft_cooldown_system(args: SystemArgs) {
     }
 }
 
+/// Rotates spacecraft by its rotation velocity
+pub fn spacecraft_rotation_system(args: SystemArgs) {
+    let rotation = args.entity.spacecraft().map(|spacecraft| {
+        args.entity.transform().rotation + args.elapsed * spacecraft.rotation_velocity
+    });
+
+    if let Some(rotation) = rotation {
+        args.modify(move |entity| entity.transform_mut().rotation = rotation);
+    }
+}
+
 /// Rotates asteroid by its rotation velocity
 pub fn asteroid_rotation_system(args: SystemArgs) {
     let rotation = args.entity.asteroid().map(|asteroid| {

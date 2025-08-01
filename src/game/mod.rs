@@ -65,6 +65,11 @@ impl Game {
         );
 
         ecs.add_system(
+            "spacecraft_rotation_system",
+            Into::<StatelessSystem>::into(systems::spacecraft_rotation_system),
+        );
+
+        ecs.add_system(
             "asteroid_rotation_system",
             Into::<StatelessSystem>::into(systems::asteroid_rotation_system),
         );
