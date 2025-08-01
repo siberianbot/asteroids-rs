@@ -5,6 +5,7 @@ use crate::{
     commands::{Commands, Registration, StatefulCommand},
     dispatch::{Dispatcher, Event},
     game::{
+        controller::Controller,
         ecs::{ECS, StatefulSystem, StatelessSystem},
         r#loop::{GameLoop, StatefulGameLogic},
         physics::Physics,
@@ -18,6 +19,7 @@ pub mod ecs;
 pub mod entities;
 
 mod commands;
+mod controller;
 mod logics;
 mod r#loop;
 mod physics;
@@ -41,6 +43,7 @@ impl Game {
         let ecs = ECS::new(event_dispatcher);
         let game_loop: Arc<GameLoop> = Default::default();
         let game_state: Arc<State> = State::new(event_dispatcher);
+        let controller = Controller::new(ecs.clone());
         let physics = Physics::new(event_dispatcher, ecs.clone());
 
         ecs.add_system(
@@ -90,6 +93,7 @@ impl Game {
                     renderer.clone(),
                     ecs.clone(),
                     game_state.clone(),
+                    controller.clone(),
                 ),
                 logics::init_game_logic,
             ),
@@ -115,31 +119,19 @@ impl Game {
             ),
         );
 
-        let camera_command_state =
-            commands::camera::CameraCommandState::new(game_state.clone(), ecs.clone());
-
         let game = Game {
             _commands: [
                 commands.add(
                     "camera_follow",
-                    StatefulCommand::new(
-                        camera_command_state.clone(),
-                        commands::camera::camera_follow_command,
-                    ),
+                    StatefulCommand::new(controller.clone(), commands::camera_follow_command),
                 ),
                 commands.add(
                     "camera_zoom_out",
-                    StatefulCommand::new(
-                        camera_command_state.clone(),
-                        commands::camera::camera_zoom_in_command,
-                    ),
+                    StatefulCommand::new(controller.clone(), commands::camera_zoom_out_command),
                 ),
                 commands.add(
                     "camera_zoom_in",
-                    StatefulCommand::new(
-                        camera_command_state.clone(),
-                        commands::camera::camera_zoom_out_command,
-                    ),
+                    StatefulCommand::new(controller.clone(), commands::camera_zoom_in_command),
                 ),
             ],
 

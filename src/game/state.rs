@@ -90,7 +90,6 @@ impl<'a> Iterator for PlayerIterMut<'a> {
 pub struct State {
     player_counter: AtomicUsize,
     players: RwLock<BTreeMap<PlayerId, Player>>,
-    camera_id: RwLock<Option<EntityId>>,
 }
 
 impl State {
@@ -99,7 +98,6 @@ impl State {
         let state = State {
             player_counter: Default::default(),
             players: Default::default(),
-            camera_id: Default::default(),
         };
 
         let state = Arc::new(state);
@@ -152,16 +150,6 @@ impl State {
 
             lock,
         }
-    }
-
-    /// Sets current camera [EntityId]
-    pub fn set_camera(&self, camera_id: Option<EntityId>) {
-        *self.camera_id.write().unwrap() = camera_id;
-    }
-
-    /// Gets current camera [EntityId]
-    pub fn get_camera(&self) -> Option<EntityId> {
-        self.camera_id.read().unwrap().clone()
     }
 
     /// Visits player by its [PlayerId]
