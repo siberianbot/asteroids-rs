@@ -6,18 +6,28 @@ use std::{
     },
 };
 
-use crate::input::Key;
+use crate::input;
 
 /// Enumeration of possible command arguments
 #[derive(Clone, Copy)]
 pub enum Arg {
     /// Argument is an input key
-    Key(Key),
+    Input(input::Key, input::State),
 }
 
-impl From<Key> for Arg {
-    fn from(value: Key) -> Self {
-        Self::Key(value)
+impl Arg {
+    /// Returns argument content if it is [Arg::Input]
+    pub fn to_input(&self) -> Option<(input::Key, input::State)> {
+        match self {
+            Arg::Input(key, state) => Some((*key, *state)),
+            _ => None,
+        }
+    }
+}
+
+impl From<(input::Key, input::State)> for Arg {
+    fn from((key, state): (input::Key, input::State)) -> Self {
+        Self::Input(key, state)
     }
 }
 

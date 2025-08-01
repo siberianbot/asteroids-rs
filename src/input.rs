@@ -1,6 +1,9 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
-    sync::{Arc, Mutex, RwLock},
+    sync::{
+        Arc, Mutex, RwLock,
+        atomic::{AtomicUsize, Ordering},
+    },
 };
 
 use winit::{
@@ -8,7 +11,7 @@ use winit::{
     keyboard::{KeyCode, PhysicalKey},
 };
 
-use crate::commands::Commands;
+use crate::{commands, handle};
 
 /// Enumeration of input keys: contains keyboard (`Kbd...`), mouse (`Mouse...`), gamepad (`G`) keys
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -119,38 +122,123 @@ impl TryFrom<KeyCode> for Key {
     }
 }
 
-/// Input manager
-pub struct Manager {
-    commands: Arc<Commands>,
-    key_maps: RwLock<BTreeMap<Key, String>>,
-    pressed: Mutex<BTreeSet<Key>>,
+/// Enumeration of possible input [Key] state
+#[derive(Clone, Copy)]
+pub enum State {
+    Pressed,
+    Released,
 }
 
-impl Manager {
-    /// Creates new instance of [Manager]
-    pub fn new(commands: Arc<Commands>) -> Manager {
-        Manager {
-            commands,
-            key_maps: Default::default(),
-            pressed: Default::default(),
+impl From<ElementState> for State {
+    fn from(value: ElementState) -> Self {
+        match value {
+            ElementState::Pressed => Self::Pressed,
+            ElementState::Released => Self::Released,
         }
     }
+}
 
-    /// Sets mapping between key and command
-    pub fn set_key_map<N>(&self, key: Key, name: N)
+/// Input scheme
+pub struct Scheme {
+    mapping: BTreeMap<String, BTreeSet<Key>>,
+}
+
+impl Scheme {
+    /// Adds mapping of keys to command
+    pub fn add<S, I>(mut self, command: S, inputs: I) -> Scheme
     where
-        N: Into<String>,
+        S: Into<String>,
+        I: IntoIterator<Item = Key>,
     {
-        let mut key_maps = self.key_maps.write().unwrap();
+        let command = command.into();
 
-        key_maps.insert(key, name.into());
+        self.mapping
+            .entry(command)
+            .or_default()
+            .extend(inputs.into_iter());
+
+        self
+    }
+}
+
+impl Default for Scheme {
+    fn default() -> Self {
+        Self {
+            mapping: Default::default(),
+        }
+    }
+}
+
+/// Input manager
+pub struct Input {
+    commands: Arc<commands::Commands>,
+    scheme_counter: AtomicUsize,
+    schemes: Arc<Mutex<BTreeMap<usize, Scheme>>>,
+    mapping: Arc<RwLock<BTreeMap<Key, BTreeMap<String, usize>>>>,
+}
+
+impl Input {
+    /// Creates new instance of [Input]
+    pub fn new(commands: Arc<commands::Commands>) -> Arc<Input> {
+        let input = Input {
+            commands,
+            scheme_counter: Default::default(),
+            schemes: Default::default(),
+            mapping: Default::default(),
+        };
+
+        Arc::new(input)
     }
 
-    /// Removes mapping for key
-    pub fn remove_key_map(&self, key: Key) {
-        let mut key_maps = self.key_maps.write().unwrap();
+    /// Adds input scheme
+    #[must_use = "returned handle removes mapping provided by scheme"]
+    pub fn add_scheme(&self, scheme: Scheme) -> handle::Handle {
+        let mut schemes = self.schemes.lock().unwrap();
+        let mut mapping = self.mapping.write().unwrap();
 
-        key_maps.remove(&key);
+        let scheme_id = self.scheme_counter.fetch_add(1, Ordering::Relaxed);
+
+        scheme
+            .mapping
+            .iter()
+            .flat_map(|(command, keys)| keys.iter().copied().map(move |key| (key, command.clone())))
+            .for_each(|(key, command)| {
+                mapping
+                    .entry(key)
+                    .or_default()
+                    .entry(command)
+                    .and_modify(|ref_count| *ref_count += 1)
+                    .or_insert(1);
+            });
+
+        schemes.insert(scheme_id, scheme);
+
+        let schemes = self.schemes.clone();
+        let mapping = self.mapping.clone();
+
+        let drop = move || {
+            if let Some(scheme) = schemes.lock().unwrap().remove(&scheme_id) {
+                let mut mapping = mapping.write().unwrap();
+
+                scheme
+                    .mapping
+                    .iter()
+                    .flat_map(|(command, keys)| keys.iter().map(move |key| (key, command)))
+                    .for_each(|(key, command)| {
+                        let mapping = mapping.entry(*key).or_default();
+
+                        if let Some(ref_count) = mapping.get_mut(command) {
+                            *ref_count -= 1;
+
+                            if *ref_count == 0 {
+                                mapping.remove(command);
+                            }
+                        }
+                    });
+            }
+        };
+
+        drop.into()
     }
 
     /// Dispatches [winit::event::KeyEvent] by our key mapping
@@ -171,24 +259,21 @@ impl Manager {
         };
 
         if let Some(key) = key {
-            let mut pressed = self.pressed.lock().unwrap();
+            let state = event.state.into();
 
-            match event.state {
-                ElementState::Pressed => pressed.insert(key),
-                ElementState::Released => pressed.remove(&key),
-            };
+            self.dispatch(key, state);
         }
     }
 
-    /// Dispatches all pressed keys
-    pub fn dispatch(&self) {
-        let pressed = self.pressed.lock().unwrap();
-        let key_maps = self.key_maps.read().unwrap();
+    /// INTERNAL: dispatches key state
+    fn dispatch(&self, key: Key, state: State) {
+        let arg = (key, state).into();
+        let mapping = self.mapping.read().unwrap();
 
-        pressed
-            .iter()
-            .copied()
-            .filter_map(|key| key_maps.get(&key).map(|command| (key, command)))
-            .for_each(|(key, command)| self.commands.invoke(command, &[key.into()]));
+        mapping.get(&key).map(|commands| {
+            for command in commands.keys() {
+                self.commands.invoke(command, &[arg]);
+            }
+        });
     }
 }

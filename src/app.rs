@@ -16,7 +16,8 @@ use crate::{
     commands::{self, Commands, StatefulCommand},
     dispatch::{Dispatcher, Event, Sender},
     game::Game,
-    input::{self},
+    handle,
+    input::{self, Input, Key, Scheme},
     rendering::{
         backend::Backend,
         renderer::{self, Renderer},
@@ -31,10 +32,13 @@ enum AppEvent {
 
 struct Inner {
     commands: Arc<Commands>,
+    input: Arc<Input>,
+
     event_sender: Sender<Event>,
-    input_manager: input::Manager,
     game: Arc<Game>,
     window: Arc<Window>,
+
+    _schemes: [handle::Handle; 1],
     _renderer_worker: Worker,
 }
 
@@ -42,6 +46,7 @@ impl Inner {
     fn new(
         commands: Arc<Commands>,
         event_dispatcher: &Dispatcher<Event>,
+        input: Arc<Input>,
         event_loop: &ActiveEventLoop,
     ) -> Inner {
         let window = Inner::init_window(event_loop);
@@ -58,11 +63,24 @@ impl Inner {
         );
 
         let inner = Inner {
-            event_sender: event_dispatcher.create_sender(),
-            input_manager: Self::init_input(commands.clone(), game.clone()),
+            _schemes: [input.add_scheme(
+                Scheme::default()
+                    .add("camera_follow", [input::Key::KbdF])
+                    .add("camera_zoom_out", [input::Key::KbdQ])
+                    .add("camera_zoom_in", [input::Key::KbdE])
+                    .add("player_forward", [input::Key::KbdW])
+                    .add("player_backward", [input::Key::KbdS])
+                    .add("player_incline_left", [input::Key::KbdA])
+                    .add("player_incline_right", [input::Key::KbdD]),
+            )],
+
             commands,
-            window,
+            input,
+
+            event_sender: event_dispatcher.create_sender(),
             game,
+            window,
+
             _renderer_worker: renderer::spawn_worker(renderer.clone()),
         };
 
@@ -81,21 +99,6 @@ impl Inner {
         Arc::new(window)
     }
 
-    fn init_input(commands: Arc<Commands>, game: Arc<Game>) -> input::Manager {
-        let manager = input::Manager::new(commands);
-
-        manager.set_key_map(input::Key::KbdEscape, "exit");
-        manager.set_key_map(input::Key::KbdF, "camera_follow");
-        manager.set_key_map(input::Key::KbdQ, "camera_zoom_out");
-        manager.set_key_map(input::Key::KbdE, "camera_zoom_in");
-        manager.set_key_map(input::Key::KbdW, "player_forward");
-        manager.set_key_map(input::Key::KbdS, "player_backward");
-        manager.set_key_map(input::Key::KbdA, "player_incline_left");
-        manager.set_key_map(input::Key::KbdD, "player_incline_right");
-
-        manager
-    }
-
     fn dispatch_window_event(&mut self, _: &ActiveEventLoop, event: WindowEvent) {
         match event {
             WindowEvent::Resized(size) => {
@@ -111,8 +114,7 @@ impl Inner {
             }
 
             WindowEvent::KeyboardInput { event, .. } => {
-                self.input_manager.dispatch_key_event(event);
-                self.input_manager.dispatch();
+                self.input.dispatch_key_event(event);
             }
 
             _ => {}
@@ -122,9 +124,12 @@ impl Inner {
 
 struct App {
     commands: Arc<Commands>,
-    _command_registrations: [commands::Registration; 1],
-
     event_dispatcher: Arc<Dispatcher<Event>>,
+    input: Arc<Input>,
+
+    _commands: [commands::Registration; 1],
+    _schemes: [handle::Handle; 1],
+
     _dispatcher_worker: Worker,
 
     inner: Option<Inner>,
@@ -133,8 +138,8 @@ struct App {
 impl App {
     fn new(proxy: EventLoopProxy<AppEvent>) -> App {
         let commands: Arc<Commands> = Default::default();
-
         let event_dispatcher = Dispatcher::new();
+        let input = Input::new(commands.clone());
 
         let dispatcher_worker = {
             let event_dispatcher = event_dispatcher.clone();
@@ -147,7 +152,7 @@ impl App {
         };
 
         let app = App {
-            _command_registrations: [commands.add(
+            _commands: [commands.add(
                 "exit",
                 StatefulCommand::new(proxy, |_, proxy| {
                     let _ = proxy.send_event(AppEvent::Exit);
@@ -155,9 +160,13 @@ impl App {
                     true
                 }),
             )],
-            commands,
 
+            _schemes: [input.add_scheme(Scheme::default().add("exit", [input::Key::KbdEscape]))],
+
+            commands,
             event_dispatcher,
+            input,
+
             _dispatcher_worker: dispatcher_worker,
 
             inner: Default::default(),
@@ -169,7 +178,12 @@ impl App {
 
 impl ApplicationHandler<AppEvent> for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        let inner = Inner::new(self.commands.clone(), &self.event_dispatcher, event_loop);
+        let inner = Inner::new(
+            self.commands.clone(),
+            &self.event_dispatcher,
+            self.input.clone(),
+            event_loop,
+        );
 
         self.inner = Some(inner);
     }
