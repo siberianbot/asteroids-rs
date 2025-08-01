@@ -6,7 +6,7 @@ use crate::{
     assets::AssetRef,
     game::{
         physics::{Collider, TriangleCollider},
-        state::PlayerId,
+        players::PlayerId,
     },
 };
 

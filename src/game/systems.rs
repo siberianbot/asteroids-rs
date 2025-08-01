@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
-    game::{ecs::SystemArgs, state::State},
+    game::{ecs::SystemArgs, players::Players},
     rendering::renderer,
 };
 
@@ -9,13 +9,13 @@ use super::entities::{CameraTarget, Entity};
 
 /// State for [camera_sync_system]
 pub struct CameraSyncSystemState {
-    game_state: Arc<State>,
+    players: Arc<Players>,
 }
 
 impl CameraSyncSystemState {
     /// Creates new instance of [CameraSyncSystemState]
-    pub fn new(game_state: Arc<State>) -> CameraSyncSystemState {
-        CameraSyncSystemState { game_state }
+    pub fn new(players: Arc<Players>) -> CameraSyncSystemState {
+        CameraSyncSystemState { players }
     }
 }
 
@@ -33,7 +33,7 @@ pub fn camera_sync_system(args: SystemArgs, state: &CameraSyncSystemState) {
                 .map(|entity| entity.transform().position),
 
             CameraTarget::Player(player_id) => state
-                .game_state
+                .players
                 .visit_player(&player_id, |player| player.spacecraft_id)
                 .flatten()
                 .and_then(|entity_id| {
@@ -112,13 +112,13 @@ pub fn asteroid_rotation_system(args: SystemArgs) {
 
 /// State for [entity_despawn_system]
 pub struct EntityDespawnSystemState {
-    game_state: Arc<State>,
+    players: Arc<Players>,
 }
 
 impl EntityDespawnSystemState {
     /// Creates new instance of [EntityDespawnSystemState]
-    pub fn new(game_state: Arc<State>) -> EntityDespawnSystemState {
-        EntityDespawnSystemState { game_state }
+    pub fn new(players: Arc<Players>) -> EntityDespawnSystemState {
+        EntityDespawnSystemState { players }
     }
 }
 
@@ -136,8 +136,8 @@ pub fn entity_despawn_system(args: SystemArgs, state: &EntityDespawnSystemState)
     }
 
     let any_near = state
-        .game_state
-        .iter_players()
+        .players
+        .iter()
         .filter_map(|(_, player)| {
             player.spacecraft_id.and_then(|spacecraft_id| {
                 args.get_entity(spacecraft_id).map(|spacecraft| {

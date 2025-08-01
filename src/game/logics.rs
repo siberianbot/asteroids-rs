@@ -14,7 +14,7 @@ use vulkano::pipeline::graphics::input_assembly::PrimitiveTopology;
 
 use crate::{
     assets::{self, MeshAssetDef, types::Vertex},
-    game::{controller::Controller, ecs::ECS, entities, state::State},
+    game::{controller::Controller, ecs::ECS, entities, players::Players},
     rendering::{self, renderer},
 };
 
@@ -23,7 +23,7 @@ pub struct InitGameLogicState {
     assets: Arc<assets::Assets>,
     renderer: Arc<renderer::Renderer>,
     ecs: Arc<ECS>,
-    game_state: Arc<State>,
+    players: Arc<Players>,
     controller: Arc<Controller>,
     initialized: AtomicBool,
 }
@@ -34,14 +34,14 @@ impl InitGameLogicState {
         assets: Arc<assets::Assets>,
         renderer: Arc<renderer::Renderer>,
         ecs: Arc<ECS>,
-        game_state: Arc<State>,
+        players: Arc<Players>,
         controller: Arc<Controller>,
     ) -> InitGameLogicState {
         InitGameLogicState {
             assets,
             renderer,
             ecs,
-            game_state,
+            players,
             controller,
             initialized: Default::default(),
         }
@@ -89,7 +89,7 @@ pub fn init_game_logic(_: f32, state: &InitGameLogicState) {
         },
     );
 
-    let player_id = state.game_state.new_player();
+    let player_id = state.players.new_player();
 
     let camera = entities::Camera {
         camera: entities::CameraComponent {
@@ -111,7 +111,7 @@ pub struct AsteroidsRespawnGameLogicState {
     passed: Mutex<f32>,
     assets: Arc<assets::Assets>,
     ecs: Arc<ECS>,
-    game_state: Arc<State>,
+    players: Arc<Players>,
 }
 
 impl AsteroidsRespawnGameLogicState {
@@ -119,13 +119,13 @@ impl AsteroidsRespawnGameLogicState {
     pub fn new(
         assets: Arc<assets::Assets>,
         ecs: Arc<ECS>,
-        game_state: Arc<State>,
+        players: Arc<Players>,
     ) -> AsteroidsRespawnGameLogicState {
         AsteroidsRespawnGameLogicState {
             passed: Default::default(),
             assets,
             ecs,
-            game_state,
+            players,
         }
     }
 }
@@ -159,8 +159,8 @@ pub fn asteroids_respawn_game_logic(elapsed: f32, state: &AsteroidsRespawnGameLo
     }
 
     let position = state
-        .game_state
-        .iter_players()
+        .players
+        .iter()
         .filter_map(|(_, player)| {
             player.spacecraft_id.and_then(|spacecraft_id| {
                 entities
@@ -214,21 +214,21 @@ pub fn asteroids_respawn_game_logic(elapsed: f32, state: &AsteroidsRespawnGameLo
 /// State for [players_respawn_game_logic]
 pub struct PlayersRespawnGameLogicState {
     ecs: Arc<ECS>,
-    game_state: Arc<State>,
+    players: Arc<Players>,
 }
 
 impl PlayersRespawnGameLogicState {
     /// Creates new instance for [PlayersRespawnGameLogicState]
-    pub fn new(ecs: Arc<ECS>, game_state: Arc<State>) -> PlayersRespawnGameLogicState {
-        PlayersRespawnGameLogicState { ecs, game_state }
+    pub fn new(ecs: Arc<ECS>, players: Arc<Players>) -> PlayersRespawnGameLogicState {
+        PlayersRespawnGameLogicState { ecs, players }
     }
 }
 
 /// Game logic for respawning players
 pub fn players_respawn_game_logic(elapsed: f32, state: &PlayersRespawnGameLogicState) {
     state
-        .game_state
-        .iter_players_mut()
+        .players
+        .iter_mut()
         .filter(|(_, player)| player.spacecraft_id.is_none())
         .for_each(|(_, player)| {
             player.respawn_timer -= elapsed;

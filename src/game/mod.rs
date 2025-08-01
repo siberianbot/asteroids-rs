@@ -7,9 +7,9 @@ use crate::{
     game::{
         controller::Controller,
         ecs::{ECS, StatefulSystem, StatelessSystem},
-        r#loop::{GameLoop, StatefulGameLogic},
+        r#loop::{Loop, StatefulGameLogic},
         physics::Physics,
-        state::State,
+        players::Players,
     },
     rendering::renderer,
     worker::Worker,
@@ -23,7 +23,7 @@ mod controller;
 mod logics;
 mod r#loop;
 mod physics;
-mod state;
+mod players;
 mod systems;
 
 /// Game infrastructure
@@ -41,15 +41,15 @@ impl Game {
         renderer: Arc<renderer::Renderer>,
     ) -> Arc<Game> {
         let ecs = ECS::new(event_dispatcher);
-        let game_loop: Arc<GameLoop> = Default::default();
-        let game_state: Arc<State> = State::new(event_dispatcher);
+        let r#loop: Arc<Loop> = Default::default();
+        let players = Players::new(event_dispatcher);
         let controller = Controller::new(ecs.clone());
         let physics = Physics::new(event_dispatcher, ecs.clone());
 
         ecs.add_system(
             "camera_sync_system",
             StatefulSystem::new(
-                systems::CameraSyncSystemState::new(game_state.clone()),
+                systems::CameraSyncSystemState::new(players.clone()),
                 systems::camera_sync_system,
             ),
         );
@@ -80,41 +80,41 @@ impl Game {
         ecs.add_system(
             "entity_despawn_system",
             StatefulSystem::new(
-                systems::EntityDespawnSystemState::new(game_state.clone()),
+                systems::EntityDespawnSystemState::new(players.clone()),
                 systems::entity_despawn_system,
             ),
         );
 
-        game_loop.add_logic(
+        r#loop.add_logic(
             "init_game_logic",
             StatefulGameLogic::new(
                 logics::InitGameLogicState::new(
                     assets.clone(),
                     renderer.clone(),
                     ecs.clone(),
-                    game_state.clone(),
+                    players.clone(),
                     controller.clone(),
                 ),
                 logics::init_game_logic,
             ),
         );
 
-        game_loop.add_logic(
+        r#loop.add_logic(
             "asteroids_respawn_game_logic",
             StatefulGameLogic::new(
                 logics::AsteroidsRespawnGameLogicState::new(
                     assets.clone(),
                     ecs.clone(),
-                    game_state.clone(),
+                    players.clone(),
                 ),
                 logics::asteroids_respawn_game_logic,
             ),
         );
 
-        game_loop.add_logic(
+        r#loop.add_logic(
             "players_respawn_game_logic",
             StatefulGameLogic::new(
-                logics::PlayersRespawnGameLogicState::new(ecs.clone(), game_state.clone()),
+                logics::PlayersRespawnGameLogicState::new(ecs.clone(), players.clone()),
                 logics::players_respawn_game_logic,
             ),
         );
@@ -137,7 +137,7 @@ impl Game {
 
             _workers: [
                 ecs::spawn_worker(ecs),
-                r#loop::spawn_worker(game_loop),
+                r#loop::spawn_worker(r#loop),
                 physics::spawn_worker(physics),
             ],
         };

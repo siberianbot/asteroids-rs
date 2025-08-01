@@ -86,16 +86,16 @@ impl<'a> Iterator for PlayerIterMut<'a> {
     }
 }
 
-/// Global game state
-pub struct State {
+/// Players container
+pub struct Players {
     player_counter: AtomicUsize,
     players: RwLock<BTreeMap<PlayerId, Player>>,
 }
 
-impl State {
+impl Players {
     /// Creates new instance of [State]
-    pub fn new(events: &Dispatcher<Event>) -> Arc<State> {
-        let state = State {
+    pub fn new(events: &Dispatcher<Event>) -> Arc<Players> {
+        let state = Players {
             player_counter: Default::default(),
             players: Default::default(),
         };
@@ -115,7 +115,7 @@ impl State {
     }
 
     /// Returns read-only iterator over list of players
-    pub fn iter_players(&self) -> PlayerIter {
+    pub fn iter(&self) -> PlayerIter {
         let lock = self.players.read().unwrap();
 
         PlayerIter {
@@ -134,7 +134,7 @@ impl State {
     }
 
     /// Returns iterator over list of players, allows mutability
-    pub fn iter_players_mut(&self) -> PlayerIterMut {
+    pub fn iter_mut(&self) -> PlayerIterMut {
         let lock = self.players.write().unwrap();
 
         PlayerIterMut {

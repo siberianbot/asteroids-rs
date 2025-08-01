@@ -46,11 +46,11 @@ unsafe impl<S> Send for StatefulGameLogic<S> where S: Send + Sync {}
 unsafe impl<S> Sync for StatefulGameLogic<S> where S: Send + Sync {}
 
 /// A game loop, which stores game logics to be executed
-pub struct GameLoop {
+pub struct Loop {
     logics: Mutex<BTreeMap<String, Box<dyn GameLogic>>>,
 }
 
-impl GameLoop {
+impl Loop {
     /// Adds game logic into the loop
     pub fn add_logic<N, L>(&self, name: N, logic: L)
     where
@@ -73,7 +73,7 @@ impl GameLoop {
     }
 }
 
-impl Default for GameLoop {
+impl Default for Loop {
     fn default() -> Self {
         Self {
             logics: Default::default(),
@@ -82,7 +82,7 @@ impl Default for GameLoop {
 }
 
 /// INTERNAL: Game loop worker thread function
-fn worker_func(game_loop: &GameLoop, elapsed: f32) {
+fn worker_func(game_loop: &Loop, elapsed: f32) {
     let logics = game_loop.logics.lock().unwrap();
 
     for (_, logic) in logics.iter() {
@@ -91,7 +91,7 @@ fn worker_func(game_loop: &GameLoop, elapsed: f32) {
 }
 
 /// Spawns game loop worker thread
-pub fn spawn_worker(game_loop: Arc<GameLoop>) -> Worker {
+pub fn spawn_worker(r#loop: Arc<Loop>) -> Worker {
     Worker::spawn("GameLoop", move |alive| {
         const UPDATE_RATE: f32 = 1.0 / 120.0;
 
@@ -100,7 +100,7 @@ pub fn spawn_worker(game_loop: Arc<GameLoop>) -> Worker {
         while alive.load(Ordering::Relaxed) {
             let elapsed = Instant::now().duration_since(last_update).as_secs_f32();
 
-            worker_func(&game_loop, elapsed);
+            worker_func(&r#loop, elapsed);
 
             last_update = Instant::now();
 

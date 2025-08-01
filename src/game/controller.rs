@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use crate::game::{ecs::ECS, entities::EntityId, state::PlayerId};
+use crate::game::{ecs::ECS, entities::EntityId, players::PlayerId};
 
 /// [crate::game::entities::Camera] zoom direction
 pub enum CameraZoomDirection {
@@ -11,7 +11,7 @@ pub enum CameraZoomDirection {
     Out,
 }
 
-/// Controller
+/// Controller: dispatches commands to entities and players
 pub struct Controller {
     ecs: Arc<ECS>,
 
