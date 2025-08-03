@@ -230,14 +230,22 @@ pub fn players_respawn_game_logic(elapsed: f32, state: &PlayersRespawnGameLogicS
         .players
         .iter_mut()
         .filter(|(_, player)| player.spacecraft_id.is_none())
-        .for_each(|(_, player)| {
+        .for_each(|(player_id, player)| {
             player.respawn_timer -= elapsed;
 
             if player.respawn_timer > 0.0 {
                 return;
             }
 
-            let spacecraft_id = state.ecs.write().create(entities::Spacecraft::default());
+            let spacecraft = entities::Spacecraft {
+                spacecraft: entities::SpacecraftComponent {
+                    owner: Some(player_id),
+                    ..Default::default()
+                },
+                ..Default::default()
+            };
+
+            let spacecraft_id = state.ecs.write().create(spacecraft);
 
             player.spacecraft_id = Some(spacecraft_id);
         });

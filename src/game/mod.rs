@@ -28,7 +28,7 @@ mod systems;
 
 /// Game infrastructure
 pub struct Game {
-    _commands: [Registration; 7],
+    _commands: [Registration; 8],
     _workers: [Worker; 3],
 }
 
@@ -60,8 +60,13 @@ impl Game {
         );
 
         ecs.add_system(
-            "spacecraft_cooldown_system",
-            Into::<StatelessSystem>::into(systems::spacecraft_cooldown_system),
+            "spacecraft_weapon_fire_system",
+            Into::<StatelessSystem>::into(systems::spacecraft_weapon_fire_system),
+        );
+
+        ecs.add_system(
+            "spacecraft_weapon_cooldown_system",
+            Into::<StatelessSystem>::into(systems::spacecraft_weapon_cooldown_system),
         );
 
         ecs.add_system(
@@ -156,6 +161,10 @@ impl Game {
                         controller.clone(),
                         commands::player_incline_right_command,
                     ),
+                ),
+                commands.add(
+                    "player_weapon_fire",
+                    StatefulCommand::new(controller.clone(), commands::player_weapon_fire_command),
                 ),
             ],
 

@@ -86,8 +86,12 @@ impl Default for CameraComponent {
 /// Component with spacecraft data
 #[derive(Default)]
 pub struct SpacecraftComponent {
+    /// Identifier of player that controls the spacecraft
+    pub owner: Option<PlayerId>,
+    /// Determines should spacecraft fire a bullet
+    pub weapon_fire: bool,
     /// Reloading cooldown
-    pub cooldown: f32,
+    pub weapon_cooldown: f32,
     /// Rotation velocity
     pub rotation_velocity: f32,
 }
@@ -148,9 +152,10 @@ impl Default for AsteroidComponent {
 }
 
 /// Component with bullet data
+#[derive(Default)]
 pub struct BulletComponent {
-    /// Identifier of entity that spawned bullet
-    pub owner: EntityId,
+    /// Identifier of player that spawned bullet
+    pub owner: Option<PlayerId>,
 }
 
 /// Component with data for [crate::rendering::renderer::Renderer]
@@ -327,9 +332,7 @@ impl Default for Bullet {
             collider: ColliderComponent {
                 colliders: vec![consts::BULLET_COLLIDER],
             },
-            bullet: BulletComponent {
-                owner: EntityId::MAX,
-            },
+            bullet: Default::default(),
             render: RenderComponent {
                 mesh: consts::BULLET_MESH_ASSET_REF.into(),
                 pipeline: consts::ENTITY_PIPELINE_ASSET_REF.into(),
@@ -525,9 +528,12 @@ pub mod consts {
     /// Count of segments in single asteroid
     pub const ASTEROID_SEGMENTS_COUNT: usize = 8;
 
+    /// Radius of bullet
+    pub const BULLET_RADIUS: f32 = 0.1;
+
     /// Default collider of bullet
     pub const BULLET_COLLIDER: Collider = Collider::Point(PointCollider {
         center: Vec2::ZERO,
-        radius: 0.1,
+        radius: BULLET_RADIUS,
     });
 }

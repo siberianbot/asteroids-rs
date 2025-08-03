@@ -107,3 +107,23 @@ pub fn player_incline_right_command(
 
     true
 }
+
+/// Dispatches `player_weapon_fire` to controller
+pub fn player_weapon_fire_command(
+    args: &[crate::commands::Arg],
+    controller: &Arc<Controller>,
+) -> bool {
+    let (_, state) = args[0]
+        .to_input()
+        .expect("invalid usage of player_weapon_fire");
+
+    match state {
+        input::State::Pressed => controller.player_weapon_fire(),
+
+        input::State::Released => {
+            controller.player_stop_weapon_fire();
+        }
+    }
+
+    true
+}

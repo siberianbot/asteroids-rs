@@ -25,9 +25,15 @@ pub mod spacecraft {
 
 /// Model of [crate::game::entities::Bullet]
 pub mod bullet {
+    use std::f32::consts::PI;
+
     use glam::Vec2;
 
-    use crate::assets::types::Vertex;
+    use crate::{assets::types::Vertex, game};
+
+    /// Radius of bullet particle
+    const RADIUS: f32 = game::entities::consts::BULLET_RADIUS;
+    const PI_4: f32 = RADIUS * PI / 4.0;
 
     /// List of vertices
     pub const VERTICES: [Vertex; 9] = [
@@ -35,28 +41,28 @@ pub mod bullet {
             position: Vec2::new(0.0, 0.0),
         },
         Vertex {
-            position: Vec2::new(0.0, 0.01),
+            position: Vec2::new(0.0, RADIUS),
         },
         Vertex {
-            position: Vec2::new(0.005, 0.005),
+            position: Vec2::new(PI_4, PI_4),
         },
         Vertex {
-            position: Vec2::new(0.01, 0.0),
+            position: Vec2::new(RADIUS, 0.0),
         },
         Vertex {
-            position: Vec2::new(0.005, -0.005),
+            position: Vec2::new(PI_4, -PI_4),
         },
         Vertex {
-            position: Vec2::new(0.0, -0.01),
+            position: Vec2::new(0.0, -RADIUS),
         },
         Vertex {
-            position: Vec2::new(-0.005, -0.005),
+            position: Vec2::new(-PI_4, -PI_4),
         },
         Vertex {
-            position: Vec2::new(-0.01, 0.0),
+            position: Vec2::new(-RADIUS, 0.0),
         },
         Vertex {
-            position: Vec2::new(-0.005, 0.005),
+            position: Vec2::new(-PI_4, PI_4),
         },
     ];
 

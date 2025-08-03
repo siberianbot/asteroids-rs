@@ -1,11 +1,17 @@
 use std::sync::Arc;
 
+use glam::Vec2;
+
 use crate::{
-    game::{ecs::SystemArgs, players::Players},
+    game::{
+        ecs::SystemArgs,
+        entities::{
+            Bullet, BulletComponent, CameraTarget, Entity, MovementComponent, TransformComponent,
+        },
+        players::Players,
+    },
     rendering::renderer,
 };
-
-use super::entities::{CameraTarget, Entity};
 
 /// State for [camera_sync_system]
 pub struct CameraSyncSystemState {
@@ -80,22 +86,64 @@ pub fn movement_system(args: SystemArgs) {
     }
 }
 
+/// Handles spacecraft weapon fire
+pub fn spacecraft_weapon_fire_system(args: SystemArgs) {
+    const BULLET_VELOCITY: f32 = 8.0;
+    const COOLDOWN: f32 = 0.2;
+
+    let bullet = args
+        .entity
+        .spacecraft()
+        .filter(|spacecraft| spacecraft.weapon_fire)
+        .and_then(|spacecraft| {
+            if spacecraft.weapon_cooldown > 0.0 {
+                None
+            } else {
+                let velocity = BULLET_VELOCITY
+                    * Vec2::ONE.rotate(args.entity.transform().rotation.sin_cos().into());
+
+                let bullet = Bullet {
+                    transform: TransformComponent {
+                        position: args.entity.transform().position,
+                        ..Default::default()
+                    },
+                    movement: MovementComponent {
+                        velocity,
+                        const_velocity: true,
+                        ..Default::default()
+                    },
+                    bullet: BulletComponent {
+                        owner: spacecraft.owner.clone(),
+                    },
+                    ..Default::default()
+                };
+
+                Some(bullet)
+            }
+        });
+
+    if let Some(bullet) = bullet {
+        args.modify(|entity| entity.spacecraft_mut().unwrap().weapon_cooldown = COOLDOWN);
+        args.create(move || bullet.into());
+    }
+}
+
 /// Updates spacecraft weapon cooldown
-pub fn spacecraft_cooldown_system(args: SystemArgs) {
+pub fn spacecraft_weapon_cooldown_system(args: SystemArgs) {
     let cooldown = args
         .entity
         .spacecraft()
-        .filter(|spacecraft| spacecraft.cooldown > 0.0)
+        .filter(|spacecraft| spacecraft.weapon_cooldown > 0.0)
         .map(|spacecraft| {
-            if spacecraft.cooldown < args.elapsed {
+            if spacecraft.weapon_cooldown < args.elapsed {
                 0.0
             } else {
-                spacecraft.cooldown - args.elapsed
+                spacecraft.weapon_cooldown - args.elapsed
             }
         });
 
     if let Some(cooldown) = cooldown {
-        args.modify(move |entity| entity.spacecraft_mut().unwrap().cooldown = cooldown);
+        args.modify(move |entity| entity.spacecraft_mut().unwrap().weapon_cooldown = cooldown);
     }
 }
 

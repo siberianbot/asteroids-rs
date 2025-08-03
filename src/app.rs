@@ -71,7 +71,8 @@ impl Inner {
                     .add("player_forward", [input::Key::KbdW])
                     .add("player_backward", [input::Key::KbdS])
                     .add("player_incline_left", [input::Key::KbdA])
-                    .add("player_incline_right", [input::Key::KbdD]),
+                    .add("player_incline_right", [input::Key::KbdD])
+                    .add("player_weapon_fire", [input::Key::KbdSpace]),
             )],
 
             commands,

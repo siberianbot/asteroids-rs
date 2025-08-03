@@ -14,6 +14,8 @@ use crate::{
 
 /// INTERNAL: action over entity which ECS should perform, enqueued by system
 enum Action {
+    /// Create entity
+    Create(Box<dyn FnOnce() -> Entity>),
     /// Modify entity
     Modify(EntityId, Box<dyn FnOnce(&mut Entity)>),
     /// Destroy entity
@@ -30,7 +32,7 @@ pub struct SystemArgs<'a> {
     pub entity: &'a Entity,
 
     entities: &'a Vec<Option<Entity>>,
-    actions: &'a mut Vec<Action>,
+    actions: &'a Mutex<Vec<Action>>,
 }
 
 impl<'a> SystemArgs<'a> {
@@ -39,21 +41,30 @@ impl<'a> SystemArgs<'a> {
         self.entities.get(entity_id).and_then(|slot| slot.as_ref())
     }
 
+    pub fn create<F>(&self, func: F)
+    where
+        F: FnOnce() -> Entity + 'static,
+    {
+        let action = Action::Create(Box::new(func));
+
+        self.actions.lock().unwrap().push(action);
+    }
+
     /// Enqueues modification of the current entity
-    pub fn modify<F>(self, func: F)
+    pub fn modify<F>(&self, func: F)
     where
         F: FnOnce(&mut Entity) + 'static,
     {
         let action = Action::Modify(self.entity_id, Box::new(func));
 
-        self.actions.push(action);
+        self.actions.lock().unwrap().push(action);
     }
 
     /// Enqueues destruction of the current entity
-    pub fn destroy(self) {
+    pub fn destroy(&self) {
         let action = Action::Destroy(self.entity_id);
 
-        self.actions.push(action);
+        self.actions.lock().unwrap().push(action);
     }
 }
 
@@ -221,7 +232,7 @@ impl<'a> EntitiesWriteLock<'a> {
     /// Modifies entity
     pub fn modify<V, R>(&mut self, entity_id: EntityId, visitor: V) -> Option<R>
     where
-        V: Fn(&mut Entity) -> R,
+        V: FnOnce(&mut Entity) -> R,
     {
         self.entities
             .get_mut(entity_id)
@@ -342,45 +353,41 @@ impl ECS {
 
 /// INTERNAL: ECS worker thread function
 fn worker_func(ecs: &ECS, elapsed: f32) {
-    let mut entities = ecs.entities.write().unwrap();
+    let mut entities = ecs.write();
     let systems = ecs.systems.lock().unwrap();
 
-    let mut actions = Vec::new();
+    let actions: Mutex<Vec<Action>> = Default::default();
 
-    let iter = entities
-        .iter()
-        .enumerate()
-        .filter_map(|(entity_id, slot)| slot.as_ref().map(|entity| (entity_id, entity)));
-
-    for (entity_id, entity) in iter {
+    for (entity_id, entity) in entities.iter() {
         for (_, system) in systems.iter() {
             let args = SystemArgs {
                 elapsed,
                 entity_id,
                 entity,
 
-                entities: &entities,
-                actions: &mut actions,
+                entities: &entities.entities,
+                actions: &actions,
             };
 
             system.invoke(args);
         }
     }
 
+    let actions = actions.into_inner().unwrap();
     for action in actions {
         match action {
+            Action::Create(func) => {
+                let entity = func();
+
+                entities.create(entity);
+            }
+
             Action::Modify(entity_id, func) => {
-                if let Some(entity) = entities.get_mut(entity_id).and_then(|slot| slot.as_mut()) {
-                    func(entity);
-                }
+                entities.modify(entity_id, func);
             }
 
             Action::Destroy(entity_id) => {
-                if let Some(slot) = entities.get_mut(entity_id) {
-                    *slot = None;
-
-                    ecs.event_sender.send(Event::EntityDestroyed(entity_id));
-                }
+                entities.destroy(entity_id);
             }
         }
     }

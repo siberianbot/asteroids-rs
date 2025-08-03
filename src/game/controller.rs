@@ -181,4 +181,36 @@ impl Controller {
                 });
         }
     }
+
+    /// Fires a weapon of current player's spacecraft
+    pub fn player_weapon_fire(&self) {
+        if let Some(player_id) = self.player_id.read().unwrap().clone() {
+            self.players
+                .visit_player(&player_id, |player| player.spacecraft_id)
+                .flatten()
+                .and_then(|spacecraft_id| {
+                    self.ecs.write().modify(spacecraft_id, |entity| {
+                        entity
+                            .spacecraft_mut()
+                            .map(|spacecraft| spacecraft.weapon_fire = true);
+                    })
+                });
+        }
+    }
+
+    /// Stops weapon fire of current player's spacecraft
+    pub fn player_stop_weapon_fire(&self) {
+        if let Some(player_id) = self.player_id.read().unwrap().clone() {
+            self.players
+                .visit_player(&player_id, |player| player.spacecraft_id)
+                .flatten()
+                .and_then(|spacecraft_id| {
+                    self.ecs.write().modify(spacecraft_id, |entity| {
+                        entity
+                            .spacecraft_mut()
+                            .map(|spacecraft| spacecraft.weapon_fire = false);
+                    })
+                });
+        }
+    }
 }
