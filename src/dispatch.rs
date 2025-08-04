@@ -85,5 +85,4 @@ pub enum Event {
     WindowResized([u32; 2]),
     EntityCreated(EntityId),
     EntityDestroyed(EntityId),
-    CollisionOccurred([EntityId; 2]), // TODO: use ECS/game logics for collision handling
 }

@@ -1,11 +1,11 @@
-use std::{f32::consts::PI, ops::RangeInclusive};
+use std::{collections::BTreeSet, f32::consts::PI, ops::RangeInclusive};
 
 use glam::{Mat4, Quat, Vec2, Vec3};
 
 use crate::{
     assets::AssetRef,
     game::{
-        physics::{Collider, TriangleCollider},
+        physics::{Collider, Collision, TriangleCollider},
         players::PlayerId,
     },
 };
@@ -49,6 +49,8 @@ pub struct MovementComponent {
 pub struct ColliderComponent {
     /// List of entity colliders
     pub colliders: Vec<Collider>,
+    /// List of collisions
+    pub collisions: BTreeSet<Collision>,
 }
 
 /// Enumeration of possible targets of camera
@@ -211,6 +213,7 @@ impl Default for Spacecraft {
             movement: Default::default(),
             collider: ColliderComponent {
                 colliders: vec![consts::SPACECRAFT_COLLIDER],
+                ..Default::default()
             },
             spacecraft: Default::default(),
             render: RenderComponent {
@@ -277,6 +280,7 @@ impl Asteroid {
                     .into()
                 })
                 .collect(),
+            ..Default::default()
         }
     }
 
@@ -331,6 +335,7 @@ impl Default for Bullet {
             movement: Default::default(),
             collider: ColliderComponent {
                 colliders: vec![consts::BULLET_COLLIDER],
+                ..Default::default()
             },
             bullet: Default::default(),
             render: RenderComponent {
@@ -409,6 +414,17 @@ impl Entity {
             Entity::Spacecraft(spacecraft) => Some(&spacecraft.collider),
             Entity::Asteroid(asteroid) => Some(&asteroid.collider),
             Entity::Bullet(bullet) => Some(&bullet.collider),
+
+            _ => None,
+        }
+    }
+
+    /// Gets mutable reference to [ColliderComponent]
+    pub fn collider_mut(&mut self) -> Option<&mut ColliderComponent> {
+        match self {
+            Entity::Spacecraft(spacecraft) => Some(&mut spacecraft.collider),
+            Entity::Asteroid(asteroid) => Some(&mut asteroid.collider),
+            Entity::Bullet(bullet) => Some(&mut bullet.collider),
 
             _ => None,
         }

@@ -8,6 +8,7 @@ use crate::{
         entities::{
             Bullet, BulletComponent, CameraTarget, Entity, MovementComponent, TransformComponent,
         },
+        physics::Collision,
         players::Players,
     },
     rendering::renderer,
@@ -210,6 +211,37 @@ pub fn entity_despawn_system(args: SystemArgs, state: &EntityDespawnSystemState)
         .any(|distance| distance < MAX_DISTANCE);
 
     if !any_near {
+        args.destroy();
+    }
+}
+
+/// Handles collisions of entities
+pub fn entity_collision_system(args: SystemArgs) {
+    let should_destroy = match args.entity {
+        Entity::Camera(_) | Entity::Spacecraft(_) => false,
+        _ => true,
+    };
+
+    if !should_destroy {
+        return;
+    }
+
+    let any_collided = args
+        .entity
+        .collider()
+        .iter()
+        .flat_map(|collider| {
+            collider.collisions.iter().map(|Collision(entity_id)| {
+                args.get_entity(*entity_id)
+                    .is_some_and(|entity| match entity {
+                        Entity::Camera(_) | Entity::Spacecraft(_) => false,
+                        _ => true,
+                    })
+            })
+        })
+        .any(|collided| collided);
+
+    if any_collided {
         args.destroy();
     }
 }

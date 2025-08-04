@@ -44,7 +44,7 @@ impl Game {
         let r#loop: Arc<Loop> = Default::default();
         let players = Players::new(event_dispatcher);
         let controller = Controller::new(ecs.clone(), players.clone());
-        let physics = Physics::new(event_dispatcher, ecs.clone());
+        let physics = Physics::new(ecs.clone());
 
         ecs.add_system(
             "camera_sync_system",
@@ -93,6 +93,11 @@ impl Game {
                 systems::EntityDespawnSystemState::new(players.clone()),
                 systems::entity_despawn_system,
             ),
+        );
+
+        ecs.add_system(
+            "entity_collision_system",
+            Into::<StatelessSystem>::into(systems::entity_collision_system),
         );
 
         r#loop.add_logic(

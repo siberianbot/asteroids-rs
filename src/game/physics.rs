@@ -1,5 +1,5 @@
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet},
     sync::{Arc, atomic::Ordering},
     thread,
     time::{Duration, Instant},
@@ -8,8 +8,7 @@ use std::{
 use glam::Vec2;
 
 use crate::{
-    dispatch::{Dispatcher, Event, Sender},
-    game::ecs::ECS,
+    game::{ecs::ECS, entities::EntityId},
     worker::Worker,
 };
 
@@ -159,58 +158,86 @@ impl From<TriangleCollider> for Collider {
     }
 }
 
+/// Detected collision data with involved [EntityId]
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
+pub struct Collision(pub EntityId);
+
 /// Physics infrastructure
 pub struct Physics {
-    event_sender: Sender<Event>,
     ecs: Arc<ECS>,
 }
 
 impl Physics {
     /// Creates new instance of [Physics]
-    pub fn new(event_dispatcher: &Dispatcher<Event>, ecs: Arc<ECS>) -> Physics {
-        Physics {
-            event_sender: event_dispatcher.create_sender(),
-            ecs,
+    pub fn new(ecs: Arc<ECS>) -> Physics {
+        Physics { ecs }
+    }
+
+    /// INTERNAL: collects all occurred collisions
+    fn collect_collisions(&self) -> BTreeMap<EntityId, BTreeSet<Collision>> {
+        let entities = self.ecs.read();
+
+        let iter_entities = || {
+            entities
+                .iter()
+                .filter_map(|(entity_id, entity)| {
+                    entity
+                        .collider()
+                        .map(|collider| (entity_id, entity.transform(), collider))
+                })
+                .flat_map(|(entity_id, transform, collider)| {
+                    collider.colliders.iter().map(move |collider| {
+                        (
+                            entity_id,
+                            collider.transform(transform.position, transform.rotation),
+                        )
+                    })
+                })
+        };
+
+        let collisions = iter_entities()
+            .flat_map(|(left_entity_id, left_collider)| {
+                iter_entities()
+                    .filter(move |(right_entity_id, _)| left_entity_id > *right_entity_id)
+                    .filter(move |(_, right_collider)| left_collider.collision_test(right_collider))
+                    .flat_map(move |(right_entity_id, _)| {
+                        [
+                            (left_entity_id, Collision(right_entity_id)),
+                            (right_entity_id, Collision(left_entity_id)),
+                        ]
+                    })
+            })
+            .fold(
+                BTreeMap::<_, BTreeSet<_>>::new(),
+                |mut map, (entity_id, collision)| {
+                    map.entry(entity_id).or_default().insert(collision);
+
+                    map
+                },
+            );
+
+        collisions
+    }
+
+    /// INTERNAL: stores all collisions in [crate::game::entities::ColliderComponent]
+    fn store_collisions(&self, collisions: BTreeMap<EntityId, BTreeSet<Collision>>) {
+        let mut entities = self.ecs.write();
+
+        for (entity_id, collisions) in collisions {
+            entities.modify(entity_id, |entity| {
+                entity
+                    .collider_mut()
+                    .map(|collider| collider.collisions.extend(collisions))
+            });
         }
     }
 }
 
 /// INTERNAL: Physics worker thread function
 fn worker_func(physics: &Physics) {
-    let entities = physics.ecs.read();
+    let collisions = physics.collect_collisions();
 
-    let iter_entities = || {
-        entities
-            .iter()
-            .filter_map(|(entity_id, entity)| {
-                entity
-                    .collider()
-                    .map(|collider| (entity_id, entity.transform(), collider))
-            })
-            .flat_map(|(entity_id, transform, collider)| {
-                collider.colliders.iter().map(move |collider| {
-                    (
-                        entity_id,
-                        collider.transform(transform.position, transform.rotation),
-                    )
-                })
-            })
-    };
-
-    let collisions = iter_entities()
-        .flat_map(|(left_entity_id, left_collider)| {
-            iter_entities()
-                .filter(move |(right_entity_id, _)| left_entity_id > *right_entity_id)
-                .filter(move |(_, right_collider)| left_collider.collision_test(right_collider))
-                .map(move |(right_entity_id, _)| [left_entity_id, right_entity_id])
-        })
-        .collect::<BTreeSet<_>>();
-
-    for collision in collisions {
-        physics
-            .event_sender
-            .send(Event::CollisionOccurred(collision));
-    }
+    physics.store_collisions(collisions);
 }
 
 /// Spawns physics worker thread
