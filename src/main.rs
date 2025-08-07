@@ -1,7 +1,7 @@
 mod app;
 mod assets;
 mod commands;
-mod dispatch;
+mod events;
 mod game;
 mod handle;
 mod input;

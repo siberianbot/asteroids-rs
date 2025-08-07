@@ -7,10 +7,7 @@ use std::{
     },
 };
 
-use crate::{
-    dispatch::{Dispatcher, Event},
-    game::entities::EntityId,
-};
+use crate::{events, game::entities::EntityId, handle};
 
 /// A player
 #[derive(Default)]
@@ -86,37 +83,63 @@ impl<'a> Iterator for PlayerIterMut<'a> {
     }
 }
 
-/// Players container
-pub struct Players {
+/// INTERNAL: inner store of players container
+#[derive(Default)]
+struct Store {
     player_counter: AtomicUsize,
     players: RwLock<BTreeMap<PlayerId, Player>>,
 }
 
+impl Store {
+    /// INTERNAL: handles [crate::dispatch::Event::EntityDestroyed]
+    fn handle_entity_destroy(&self, entity_id: EntityId) {
+        let player_id = self
+            .players
+            .read()
+            .unwrap()
+            .iter()
+            .filter(|(_, player)| player.spacecraft_id == Some(entity_id))
+            .map(|(player_id, _)| *player_id)
+            .next();
+
+        if let Some(player_id) = player_id {
+            if let Some(player) = self.players.write().unwrap().get_mut(&player_id) {
+                player.spacecraft_id = None;
+            }
+        }
+    }
+}
+
+/// Players container
+pub struct Players {
+    store: Arc<Store>,
+    _handler: handle::Handle,
+}
+
 impl Players {
-    /// Creates new instance of [State]
-    pub fn new(events: &Dispatcher<Event>) -> Arc<Players> {
-        let state = Players {
-            player_counter: Default::default(),
-            players: Default::default(),
+    /// Creates new instance of [Players]
+    pub fn new(events: &events::Events) -> Arc<Players> {
+        let store: Arc<Store> = Default::default();
+
+        let players = Players {
+            store: store.clone(),
+            _handler: events.add_handler(move |event| {
+                match event {
+                    events::Event::EntityDestroyed(entity_id) => {
+                        store.handle_entity_destroy(*entity_id);
+                    }
+
+                    _ => {}
+                };
+            }),
         };
 
-        let state = Arc::new(state);
-
-        {
-            let state = state.clone();
-
-            events.add_handler(move |event| match event {
-                Event::EntityDestroyed(entity_id) => state.handle_entity_destroy(*entity_id),
-                _ => {}
-            });
-        }
-
-        state
+        Arc::new(players)
     }
 
     /// Returns read-only iterator over list of players
     pub fn iter(&self) -> PlayerIter {
-        let lock = self.players.read().unwrap();
+        let lock = self.store.players.read().unwrap();
 
         PlayerIter {
             player_id: lock
@@ -135,7 +158,7 @@ impl Players {
 
     /// Returns iterator over list of players, allows mutability
     pub fn iter_mut(&self) -> PlayerIterMut {
-        let lock = self.players.write().unwrap();
+        let lock = self.store.players.write().unwrap();
 
         PlayerIterMut {
             player_id: lock
@@ -157,15 +180,15 @@ impl Players {
     where
         V: FnOnce(&Player) -> R,
     {
-        let players = self.players.read().unwrap();
+        let players = self.store.players.read().unwrap();
 
         players.get(player_id).map(visitor)
     }
 
     /// Creates new player and returns its [PlayerId]
     pub fn new_player(&self) -> PlayerId {
-        let mut players = self.players.write().unwrap();
-        let player_id = self.player_counter.fetch_add(1, Ordering::Relaxed);
+        let mut players = self.store.players.write().unwrap();
+        let player_id = self.store.player_counter.fetch_add(1, Ordering::Relaxed);
 
         players.insert(player_id, Default::default());
 
@@ -174,26 +197,8 @@ impl Players {
 
     /// Kicks player by its [PlayerId]
     pub fn kick_player(&self, player_id: PlayerId) {
-        let mut players = self.players.write().unwrap();
+        let mut players = self.store.players.write().unwrap();
 
         players.remove(&player_id);
-    }
-
-    /// INTERNAL: handles [crate::dispatch::Event::EntityDestroyed]
-    fn handle_entity_destroy(&self, entity_id: EntityId) {
-        let player_id = self
-            .players
-            .read()
-            .unwrap()
-            .iter()
-            .filter(|(_, player)| player.spacecraft_id == Some(entity_id))
-            .map(|(player_id, _)| *player_id)
-            .next();
-
-        if let Some(player_id) = player_id {
-            if let Some(player) = self.players.write().unwrap().get_mut(&player_id) {
-                player.spacecraft_id = None;
-            }
-        }
     }
 }

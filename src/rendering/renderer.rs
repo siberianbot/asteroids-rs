@@ -21,8 +21,9 @@ use vulkano::{
 
 use crate::{
     assets::{AssetRef, Assets, types::Vertex},
-    dispatch::{Dispatcher, Event},
+    events,
     game::entities::{Asteroid, Bullet, Camera, EntityId, Spacecraft},
+    handle,
     rendering::{
         backend::{Backend, Frame},
         shaders,
@@ -114,14 +115,21 @@ struct ModelCache {
     descriptor_set: Arc<DescriptorSet>,
 }
 
+/// INTERNAL: some inner data store for [Renderer]
+#[derive(Default)]
+struct Store {
+    view_entity_id: RwLock<Option<EntityId>>,
+    render_data: Mutex<BTreeMap<EntityId, RenderData>>,
+    model_cache: Mutex<BTreeMap<EntityId, ModelCache>>,
+}
+
 /// Renderer
 pub struct Renderer {
     command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
     descriptor_set_allocator: Arc<dyn DescriptorSetAllocator>,
 
-    view_entity_id: RwLock<Option<EntityId>>,
-    render_data: Mutex<BTreeMap<EntityId, RenderData>>,
-    model_cache: Mutex<BTreeMap<EntityId, ModelCache>>,
+    store: Arc<Store>,
+    _handler: handle::Handle,
 
     backend: Arc<Backend>,
     assets: Arc<Assets>,
@@ -130,43 +138,36 @@ pub struct Renderer {
 impl Renderer {
     /// Creates new instance of [Renderer]
     pub fn new(
-        events: &Dispatcher<Event>,
+        events: &events::Events,
         backend: Arc<Backend>,
         assets: Arc<Assets>,
     ) -> Arc<Renderer> {
+        let store: Arc<Store> = Default::default();
+
         let renderer = Renderer {
             command_buffer_allocator: backend.create_command_buffer_allocator(),
             descriptor_set_allocator: backend.create_descriptor_set_allocator(),
 
-            view_entity_id: Default::default(),
-            render_data: Default::default(),
-            model_cache: Default::default(),
+            store: store.clone(),
+            _handler: events.add_handler(move |event| match event {
+                events::Event::EntityDestroyed(entity_id) => {
+                    store.render_data.lock().unwrap().remove(entity_id);
+                    store.model_cache.lock().unwrap().remove(entity_id);
+                }
+
+                _ => {}
+            }),
 
             backend,
             assets,
         };
 
-        let renderer = Arc::new(renderer);
-
-        {
-            let renderer = renderer.clone();
-
-            events.add_handler(move |event| match event {
-                Event::EntityDestroyed(entity_id) => {
-                    renderer.render_data.lock().unwrap().remove(entity_id);
-                    renderer.model_cache.lock().unwrap().remove(entity_id);
-                }
-
-                _ => {}
-            });
-        }
-
-        renderer
+        Arc::new(renderer)
     }
 
     /// Sets entity to be used as view data source
     pub fn set_view(&self, entity_id: Option<EntityId>) {
-        let mut view_entity_id = self.view_entity_id.write().unwrap();
+        let mut view_entity_id = self.store.view_entity_id.write().unwrap();
 
         *view_entity_id = entity_id;
     }
@@ -176,7 +177,7 @@ impl Renderer {
     where
         RD: Into<RenderData>,
     {
-        let mut render_data = self.render_data.lock().unwrap();
+        let mut render_data = self.store.render_data.lock().unwrap();
 
         render_data.insert(entity_id, data.into());
     }
@@ -195,10 +196,11 @@ impl Renderer {
             index_len: u64,
         }
 
-        let render_data = self.render_data.lock().unwrap();
-        let mut model_cache = self.model_cache.lock().unwrap();
+        let render_data = self.store.render_data.lock().unwrap();
+        let mut model_cache = self.store.model_cache.lock().unwrap();
 
         let camera_matrix = self
+            .store
             .view_entity_id
             .read()
             .unwrap()

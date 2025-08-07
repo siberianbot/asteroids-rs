@@ -1,7 +1,4 @@
-use std::{
-    ops::{Div, Mul},
-    sync::{Arc, atomic::Ordering},
-};
+use std::sync::Arc;
 
 use winit::{
     application::ApplicationHandler,
@@ -12,17 +9,9 @@ use winit::{
 };
 
 use crate::{
-    assets::Assets,
-    commands::{self, Commands, StatefulCommand},
-    dispatch::{Dispatcher, Event, Sender},
-    game::Game,
-    handle,
-    input::{self, Input, Key, Scheme},
-    rendering::{
-        backend::Backend,
-        renderer::{self, Renderer},
-    },
-    worker::Worker,
+    assets, commands, events, game, handle, input,
+    rendering::{backend, renderer},
+    worker,
 };
 
 #[derive(Debug)]
@@ -31,40 +20,33 @@ enum AppEvent {
 }
 
 struct Inner {
-    commands: Arc<Commands>,
-    input: Arc<Input>,
-
-    event_sender: Sender<Event>,
-    game: Arc<Game>,
+    commands: Arc<commands::Commands>,
+    input: Arc<input::Input>,
     window: Arc<Window>,
 
+    _game: Arc<game::Game>,
     _schemes: [handle::Handle; 1],
-    _renderer_worker: Worker,
+    _workers: [worker::Worker; 1],
 }
 
 impl Inner {
     fn new(
-        commands: Arc<Commands>,
-        event_dispatcher: &Dispatcher<Event>,
-        input: Arc<Input>,
+        events: &events::Events,
+        commands: Arc<commands::Commands>,
+        input: Arc<input::Input>,
         event_loop: &ActiveEventLoop,
     ) -> Inner {
         let window = Inner::init_window(event_loop);
 
-        let backend = Backend::new(event_dispatcher, event_loop, window.clone());
-        let assets = Assets::new(backend.clone());
-        let renderer = Renderer::new(event_dispatcher, backend.clone(), assets.clone());
-
-        let game = Game::new(
-            event_dispatcher,
-            commands.clone(),
-            assets.clone(),
-            renderer.clone(),
-        );
+        let backend = backend::Backend::new(event_loop, window.clone());
+        let assets = assets::Assets::new(backend.clone());
+        let renderer = renderer::Renderer::new(events, backend.clone(), assets.clone());
 
         let inner = Inner {
+            _game: game::Game::new(events, commands.clone(), assets.clone(), renderer.clone()),
+
             _schemes: [input.add_scheme(
-                Scheme::default()
+                input::Scheme::default()
                     .add("camera_follow", [input::Key::KbdF])
                     .add("camera_zoom_out", [input::Key::KbdQ])
                     .add("camera_zoom_in", [input::Key::KbdE])
@@ -75,14 +57,11 @@ impl Inner {
                     .add("player_weapon_fire", [input::Key::KbdSpace]),
             )],
 
+            _workers: [renderer::spawn_worker(renderer.clone())],
+
             commands,
             input,
-
-            event_sender: event_dispatcher.create_sender(),
-            game,
             window,
-
-            _renderer_worker: renderer::spawn_worker(renderer.clone()),
         };
 
         inner
@@ -102,10 +81,6 @@ impl Inner {
 
     fn dispatch_window_event(&mut self, _: &ActiveEventLoop, event: WindowEvent) {
         match event {
-            WindowEvent::Resized(size) => {
-                self.event_sender.send(Event::WindowResized(size.into()));
-            }
-
             WindowEvent::RedrawRequested => {
                 self.window.request_redraw();
             }
@@ -124,53 +99,44 @@ impl Inner {
 }
 
 struct App {
-    commands: Arc<Commands>,
-    event_dispatcher: Arc<Dispatcher<Event>>,
-    input: Arc<Input>,
+    commands: Arc<commands::Commands>,
+    events: Arc<events::Events>,
+    input: Arc<input::Input>,
+
+    inner: Option<Inner>,
 
     _commands: [commands::Registration; 1],
     _schemes: [handle::Handle; 1],
-
-    _dispatcher_worker: Worker,
-
-    inner: Option<Inner>,
+    _workers: [worker::Worker; 1],
 }
 
 impl App {
     fn new(proxy: EventLoopProxy<AppEvent>) -> App {
-        let commands: Arc<Commands> = Default::default();
-        let event_dispatcher = Dispatcher::new();
-        let input = Input::new(commands.clone());
-
-        let dispatcher_worker = {
-            let event_dispatcher = event_dispatcher.clone();
-
-            Worker::spawn("Dispatcher", move |alive| {
-                while alive.load(Ordering::Relaxed) {
-                    event_dispatcher.dispatch();
-                }
-            })
-        };
+        let commands: Arc<commands::Commands> = Default::default();
+        let events: Arc<events::Events> = Default::default();
+        let input = input::Input::new(commands.clone());
 
         let app = App {
             _commands: [commands.add(
                 "exit",
-                StatefulCommand::new(proxy, |_, proxy| {
+                commands::StatefulCommand::new(proxy, |_, proxy| {
                     let _ = proxy.send_event(AppEvent::Exit);
 
                     true
                 }),
             )],
 
-            _schemes: [input.add_scheme(Scheme::default().add("exit", [input::Key::KbdEscape]))],
+            _schemes: [
+                input.add_scheme(input::Scheme::default().add("exit", [input::Key::KbdEscape]))
+            ],
 
-            commands,
-            event_dispatcher,
-            input,
-
-            _dispatcher_worker: dispatcher_worker,
+            _workers: [events::spawn_worker(events.clone())],
 
             inner: Default::default(),
+
+            commands,
+            events,
+            input,
         };
 
         app
@@ -180,8 +146,8 @@ impl App {
 impl ApplicationHandler<AppEvent> for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let inner = Inner::new(
+            &self.events,
             self.commands.clone(),
-            &self.event_dispatcher,
             self.input.clone(),
             event_loop,
         );

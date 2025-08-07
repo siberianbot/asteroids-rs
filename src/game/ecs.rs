@@ -7,9 +7,9 @@ use std::{
 };
 
 use crate::{
-    dispatch::{Dispatcher, Event, Sender},
+    events,
     game::entities::{Entity, EntityId},
-    worker::Worker,
+    worker,
 };
 
 /// INTERNAL: action over entity which ECS should perform, enqueued by system
@@ -187,7 +187,7 @@ impl<'a> EntitiesRead for EntitiesReadLock<'a> {
 /// Lock over entities collection in [ECS] with ability to modify data
 pub struct EntitiesWriteLock<'a> {
     entities: RwLockWriteGuard<'a, Vec<Option<Entity>>>,
-    event_sender: Sender<Event>,
+    event_sender: events::Sender,
 }
 
 impl<'a> EntitiesWriteLock<'a> {
@@ -224,7 +224,8 @@ impl<'a> EntitiesWriteLock<'a> {
             self.entities[entity_id] = Some(entity);
         }
 
-        self.event_sender.send(Event::EntityCreated(entity_id));
+        self.event_sender
+            .send(events::Event::EntityCreated(entity_id));
 
         entity_id
     }
@@ -245,7 +246,8 @@ impl<'a> EntitiesWriteLock<'a> {
         if let Some(slot) = self.entities.get_mut(entity_id) {
             *slot = None;
 
-            self.event_sender.send(Event::EntityDestroyed(entity_id));
+            self.event_sender
+                .send(events::Event::EntityDestroyed(entity_id));
         }
     }
 }
@@ -297,16 +299,16 @@ where
 
 /// Entity-Component-System infrastructure
 pub struct ECS {
-    event_sender: Sender<Event>,
+    event_sender: events::Sender,
     entities: RwLock<Vec<Option<Entity>>>,
     systems: Mutex<BTreeMap<String, Box<dyn System>>>,
 }
 
 impl ECS {
     /// Creates new instance of [ECS]
-    pub fn new(event_dispatcher: &Dispatcher<Event>) -> Arc<ECS> {
+    pub fn new(events: &events::Events) -> Arc<ECS> {
         let ecs = ECS {
-            event_sender: event_dispatcher.create_sender(),
+            event_sender: events.get_sender(),
             entities: Default::default(),
             systems: Default::default(),
         };
@@ -394,8 +396,8 @@ fn worker_func(ecs: &ECS, elapsed: f32) {
 }
 
 /// Spawns ECS worker thread
-pub fn spawn_worker(ecs: Arc<ECS>) -> Worker {
-    Worker::spawn("ECS", move |alive| {
+pub fn spawn_worker(ecs: Arc<ECS>) -> worker::Worker {
+    worker::Worker::spawn("ECS", move |alive| {
         const UPDATE_RATE: f32 = 1.0 / 120.0;
 
         let mut last_update = Instant::now();

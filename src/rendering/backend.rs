@@ -48,10 +48,7 @@ use vulkano::{
 };
 use winit::{event_loop::ActiveEventLoop, window::Window};
 
-use crate::{
-    dispatch::{Dispatcher, Event},
-    rendering::shaders::Vertex,
-};
+use crate::rendering::shaders::Vertex;
 
 const DEVICE_EXTENSIONS: DeviceExtensions = DeviceExtensions {
     khr_swapchain: true,
@@ -378,11 +375,7 @@ pub struct Backend {
 }
 
 impl Backend {
-    pub fn new(
-        event_dispatcher: &Dispatcher<Event>,
-        event_loop: &ActiveEventLoop,
-        window: Arc<Window>,
-    ) -> Arc<Backend> {
+    pub fn new(event_loop: &ActiveEventLoop, window: Arc<Window>) -> Arc<Backend> {
         let library = VulkanLibrary::new().expect("there is no Vulkan");
         let required_extensions =
             Surface::required_extensions(event_loop).expect("failed to get required extensions");
@@ -418,8 +411,6 @@ impl Backend {
         let memory_allocator = StandardMemoryAllocator::new_default(logical_device.handle.clone());
 
         let swapchain = Swapchain::new(&physical_device, &logical_device, surface, window);
-
-        event_dispatcher.add_handler(move |event| if let Event::WindowResized(size) = event {});
 
         let backend = Backend {
             physical_device,

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::{
     assets,
     commands::{Commands, Registration, StatefulCommand},
-    dispatch::{Dispatcher, Event},
+    events,
     game::{
         controller::Controller,
         ecs::{ECS, StatefulSystem, StatelessSystem},
@@ -35,14 +35,14 @@ pub struct Game {
 impl Game {
     /// Creates new instance of [Game] with default systems and game logics
     pub fn new(
-        event_dispatcher: &Dispatcher<Event>,
+        events: &events::Events,
         commands: Arc<Commands>,
         assets: Arc<assets::Assets>,
         renderer: Arc<renderer::Renderer>,
     ) -> Arc<Game> {
-        let ecs = ECS::new(event_dispatcher);
+        let ecs = ECS::new(events);
         let r#loop: Arc<Loop> = Default::default();
-        let players = Players::new(event_dispatcher);
+        let players = Players::new(events);
         let controller = Controller::new(ecs.clone(), players.clone());
         let physics = Physics::new(ecs.clone());
 
