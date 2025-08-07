@@ -152,7 +152,7 @@ impl Renderer {
             let renderer = renderer.clone();
 
             events.add_handler(move |event| match event {
-                Event::EntityCreated(entity_id) => {
+                Event::EntityDestroyed(entity_id) => {
                     renderer.render_data.lock().unwrap().remove(entity_id);
                     renderer.model_cache.lock().unwrap().remove(entity_id);
                 }
