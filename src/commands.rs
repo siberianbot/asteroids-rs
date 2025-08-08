@@ -6,7 +6,7 @@ use std::{
     },
 };
 
-use crate::input;
+use crate::{handle, input};
 
 /// Enumeration of possible command arguments
 #[derive(Clone, Copy)]
@@ -20,7 +20,6 @@ impl Arg {
     pub fn to_input(&self) -> Option<(input::Key, input::State)> {
         match self {
             Arg::Input(key, state) => Some((*key, *state)),
-            _ => None,
         }
     }
 }
@@ -76,12 +75,12 @@ type CommandList = BTreeMap<CommandId, Box<dyn Command>>;
 
 /// INTERNAL: command infrastructure state
 #[derive(Default)]
-struct Inner {
+struct State {
     commands: RwLock<BTreeMap<String, CommandList>>,
     id_counter: AtomicUsize,
 }
 
-impl Inner {
+impl State {
     /// INTERNAL: adds command
     fn add<C>(&self, name: String, command: C) -> CommandId
     where
@@ -120,40 +119,29 @@ impl Inner {
     }
 }
 
-/// Command registration, removes command delegate on drop
-pub struct Registration {
-    inner: Arc<Inner>,
-    name: String,
-    command_id: CommandId,
-}
-
-impl Drop for Registration {
-    fn drop(&mut self) {
-        self.inner.remove(&self.name, self.command_id);
-    }
-}
-
 /// Commands infrastructure
 #[derive(Default)]
 pub struct Commands {
-    inner: Arc<Inner>,
+    state: Arc<State>,
 }
 
 impl Commands {
     /// Adds command
-    #[must_use = "registration removes command on drop"]
-    pub fn add<N, C>(&self, name: N, command: C) -> Registration
+    #[must_use = "returned handle removes command on drop"]
+    pub fn add<N, C>(&self, name: N, command: C) -> handle::Handle
     where
         N: Into<String>,
         C: Command + 'static,
     {
         let name = name.into();
+        let command_id = self.state.add(name.clone(), command);
 
-        Registration {
-            inner: self.inner.clone(),
-            name: name.clone(),
-            command_id: self.inner.add(name, command),
-        }
+        let state = self.state.clone();
+        let drop = move || {
+            state.remove(&name, command_id);
+        };
+
+        drop.into()
     }
 
     /// Invokes command
@@ -161,6 +149,6 @@ impl Commands {
     where
         N: Into<String>,
     {
-        self.inner.invoke(&name.into(), args);
+        self.state.invoke(&name.into(), args);
     }
 }

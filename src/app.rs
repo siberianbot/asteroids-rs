@@ -113,7 +113,7 @@ struct App {
 
     state: Option<State>,
 
-    _commands: [commands::Registration; 1],
+    _commands: [handle::Handle; 1],
     _schemes: [handle::Handle; 1],
     _workers: [handle::Handle; 1],
 }

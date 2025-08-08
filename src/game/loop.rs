@@ -47,29 +47,29 @@ unsafe impl<S> Sync for StatefulGameLogic<S> where S: Send + Sync {}
 
 /// A game loop, which stores game logics to be executed
 pub struct Loop {
-    logics: Mutex<BTreeMap<String, Box<dyn GameLogic>>>,
+    logics: Arc<Mutex<BTreeMap<String, Box<dyn GameLogic>>>>,
 }
 
 impl Loop {
     /// Adds game logic into the loop
-    pub fn add_logic<N, L>(&self, name: N, logic: L)
+    #[must_use = "returned handle removes logic on drop"]
+    pub fn add_logic<N, L>(&self, name: N, logic: L) -> handle::Handle
     where
         N: Into<String>,
         L: GameLogic + 'static,
     {
+        let name = name.into();
+
         let mut logics = self.logics.lock().unwrap();
+        logics.insert(name.clone(), Box::new(logic));
 
-        logics.insert(name.into(), Box::new(logic));
-    }
+        let logics = self.logics.clone();
+        let drop = move || {
+            let mut logics = logics.lock().unwrap();
+            logics.remove(&name);
+        };
 
-    /// Removes game logic from the loop
-    pub fn remove_logic<N>(&self, name: N)
-    where
-        N: Into<String>,
-    {
-        let mut logics = self.logics.lock().unwrap();
-
-        logics.remove(&name.into());
+        drop.into()
     }
 }
 

@@ -301,7 +301,7 @@ where
 pub struct ECS {
     event_sender: events::Sender,
     entities: RwLock<Vec<Option<Entity>>>,
-    systems: Mutex<BTreeMap<String, Box<dyn System>>>,
+    systems: Arc<Mutex<BTreeMap<String, Box<dyn System>>>>,
 }
 
 impl ECS {
@@ -317,24 +317,24 @@ impl ECS {
     }
 
     /// Adds system
-    pub fn add_system<N, S>(&self, name: N, system: S)
+    #[must_use = "returned handle removes system on drop"]
+    pub fn add_system<N, S>(&self, name: N, system: S) -> handle::Handle
     where
         N: Into<String>,
         S: System + 'static,
     {
+        let name = name.into();
+
         let mut systems = self.systems.lock().unwrap();
+        systems.insert(name.clone(), Box::new(system));
 
-        systems.insert(name.into(), Box::new(system));
-    }
+        let systems = self.systems.clone();
+        let drop = move || {
+            let mut systems = systems.lock().unwrap();
+            systems.remove(&name);
+        };
 
-    /// Removes system
-    pub fn remove_system<N>(&self, name: N)
-    where
-        N: Into<String>,
-    {
-        let mut systems = self.systems.lock().unwrap();
-
-        systems.remove(&name.into());
+        drop.into()
     }
 
     /// Locks entities collection for reading
