@@ -7,7 +7,7 @@ use std::{
     },
 };
 
-use crate::{game::entities::EntityId, handle, worker};
+use crate::{game::entities::EntityId, handle, workers};
 
 /// Enumeration of possible events
 #[derive(Clone, Debug, PartialEq)]
@@ -103,9 +103,9 @@ fn worker_func(events: &Events) {
 }
 
 /// Spawns events worker thread
-pub fn spawn_worker(events: Arc<Events>) -> worker::Worker {
-    worker::Worker::spawn("Events", move |alive| {
-        while alive.load(Ordering::Relaxed) {
+pub fn spawn_worker(workers: &workers::Workers, events: Arc<Events>) -> handle::Handle {
+    workers.spawn("Events", move |token| {
+        while !token.is_cancelled() {
             worker_func(&events);
         }
     })

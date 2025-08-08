@@ -11,7 +11,7 @@ use winit::{
 use crate::{
     assets, commands, events, game, handle, input,
     rendering::{backend, renderer},
-    worker,
+    workers,
 };
 
 #[derive(Debug)]
@@ -19,31 +19,38 @@ enum AppEvent {
     Exit,
 }
 
-struct Inner {
+struct State {
     commands: Arc<commands::Commands>,
     input: Arc<input::Input>,
     window: Arc<Window>,
 
     _game: Arc<game::Game>,
     _schemes: [handle::Handle; 1],
-    _workers: [worker::Worker; 1],
+    _workers: [handle::Handle; 1],
 }
 
-impl Inner {
+impl State {
     fn new(
+        workers: &workers::Workers,
         events: &events::Events,
         commands: Arc<commands::Commands>,
         input: Arc<input::Input>,
         event_loop: &ActiveEventLoop,
-    ) -> Inner {
-        let window = Inner::init_window(event_loop);
+    ) -> State {
+        let window = State::init_window(event_loop);
 
         let backend = backend::Backend::new(event_loop, window.clone());
         let assets = assets::Assets::new(backend.clone());
         let renderer = renderer::Renderer::new(events, backend.clone(), assets.clone());
 
-        let inner = Inner {
-            _game: game::Game::new(events, commands.clone(), assets.clone(), renderer.clone()),
+        let inner = State {
+            _game: game::Game::new(
+                workers,
+                events,
+                commands.clone(),
+                assets.clone(),
+                renderer.clone(),
+            ),
 
             _schemes: [input.add_scheme(
                 input::Scheme::default()
@@ -57,7 +64,7 @@ impl Inner {
                     .add("player_weapon_fire", [input::Key::KbdSpace]),
             )],
 
-            _workers: [renderer::spawn_worker(renderer.clone())],
+            _workers: [renderer::spawn_worker(workers, renderer.clone())],
 
             commands,
             input,
@@ -99,19 +106,21 @@ impl Inner {
 }
 
 struct App {
+    workers: workers::Workers,
     commands: Arc<commands::Commands>,
     events: Arc<events::Events>,
     input: Arc<input::Input>,
 
-    inner: Option<Inner>,
+    state: Option<State>,
 
     _commands: [commands::Registration; 1],
     _schemes: [handle::Handle; 1],
-    _workers: [worker::Worker; 1],
+    _workers: [handle::Handle; 1],
 }
 
 impl App {
     fn new(proxy: EventLoopProxy<AppEvent>) -> App {
+        let workers: workers::Workers = Default::default();
         let commands: Arc<commands::Commands> = Default::default();
         let events: Arc<events::Events> = Default::default();
         let input = input::Input::new(commands.clone());
@@ -130,10 +139,11 @@ impl App {
                 input.add_scheme(input::Scheme::default().add("exit", [input::Key::KbdEscape]))
             ],
 
-            _workers: [events::spawn_worker(events.clone())],
+            _workers: [events::spawn_worker(&workers, events.clone())],
 
-            inner: Default::default(),
+            state: Default::default(),
 
+            workers,
             commands,
             events,
             input,
@@ -145,18 +155,19 @@ impl App {
 
 impl ApplicationHandler<AppEvent> for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        let inner = Inner::new(
+        let state = State::new(
+            &self.workers,
             &self.events,
             self.commands.clone(),
             self.input.clone(),
             event_loop,
         );
 
-        self.inner = Some(inner);
+        self.state = Some(state);
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _: WindowId, event: WindowEvent) {
-        self.inner
+        self.state
             .as_mut()
             .expect("there is no inner app state")
             .dispatch_window_event(event_loop, event);

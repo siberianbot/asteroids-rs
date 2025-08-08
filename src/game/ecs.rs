@@ -1,7 +1,7 @@
 use std::{
     collections::BTreeMap,
     ptr::NonNull,
-    sync::{Arc, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard, atomic::Ordering},
+    sync::{Arc, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard},
     thread,
     time::{Duration, Instant},
 };
@@ -9,7 +9,7 @@ use std::{
 use crate::{
     events,
     game::entities::{Entity, EntityId},
-    worker,
+    handle, workers,
 };
 
 /// INTERNAL: action over entity which ECS should perform, enqueued by system
@@ -396,13 +396,13 @@ fn worker_func(ecs: &ECS, elapsed: f32) {
 }
 
 /// Spawns ECS worker thread
-pub fn spawn_worker(ecs: Arc<ECS>) -> worker::Worker {
-    worker::Worker::spawn("ECS", move |alive| {
+pub fn spawn_worker(workers: &workers::Workers, ecs: Arc<ECS>) -> handle::Handle {
+    workers.spawn("ECS", move |token| {
         const UPDATE_RATE: f32 = 1.0 / 120.0;
 
         let mut last_update = Instant::now();
 
-        while alive.load(Ordering::Relaxed) {
+        while !token.is_cancelled() {
             let elapsed = Instant::now().duration_since(last_update).as_secs_f32();
 
             worker_func(&ecs, elapsed);

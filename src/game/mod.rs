@@ -11,8 +11,9 @@ use crate::{
         physics::Physics,
         players::Players,
     },
+    handle,
     rendering::renderer,
-    worker::Worker,
+    workers,
 };
 
 pub mod ecs;
@@ -29,12 +30,13 @@ mod systems;
 /// Game infrastructure
 pub struct Game {
     _commands: [Registration; 8],
-    _workers: [Worker; 3],
+    _workers: [handle::Handle; 3],
 }
 
 impl Game {
     /// Creates new instance of [Game] with default systems and game logics
     pub fn new(
+        workers: &workers::Workers,
         events: &events::Events,
         commands: Arc<Commands>,
         assets: Arc<assets::Assets>,
@@ -174,9 +176,9 @@ impl Game {
             ],
 
             _workers: [
-                ecs::spawn_worker(ecs),
-                r#loop::spawn_worker(r#loop),
-                physics::spawn_worker(physics),
+                ecs::spawn_worker(workers, ecs),
+                r#loop::spawn_worker(workers, r#loop),
+                physics::spawn_worker(workers, physics),
             ],
         };
 

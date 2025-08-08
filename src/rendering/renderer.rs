@@ -1,7 +1,7 @@
 use std::{
     collections::BTreeMap,
     f32::consts::PI,
-    sync::{Arc, Mutex, RwLock, atomic::Ordering},
+    sync::{Arc, Mutex, RwLock},
 };
 
 use glam::{Mat4, Vec3};
@@ -28,7 +28,7 @@ use crate::{
         backend::{Backend, Frame},
         shaders,
     },
-    worker::Worker,
+    workers,
 };
 
 /// View data to use in rendering
@@ -374,9 +374,9 @@ fn worker_func(renderer: &Renderer) {
 }
 
 /// Spawns renderer worker thread
-pub fn spawn_worker(renderer: Arc<Renderer>) -> Worker {
-    Worker::spawn("Renderer", move |alive| {
-        while alive.load(Ordering::Relaxed) {
+pub fn spawn_worker(workers: &workers::Workers, renderer: Arc<Renderer>) -> handle::Handle {
+    workers.spawn("Renderer", move |token| {
+        while !token.is_cancelled() {
             worker_func(&renderer);
         }
     })

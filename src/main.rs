@@ -6,7 +6,7 @@ mod game;
 mod handle;
 mod input;
 mod rendering;
-mod worker;
+mod workers;
 
 fn main() {
     app::run();

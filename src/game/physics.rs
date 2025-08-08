@@ -1,6 +1,6 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
-    sync::{Arc, atomic::Ordering},
+    sync::Arc,
     thread,
     time::{Duration, Instant},
 };
@@ -9,7 +9,7 @@ use glam::Vec2;
 
 use crate::{
     game::{ecs::ECS, entities::EntityId},
-    worker::Worker,
+    handle, workers,
 };
 
 /// Point collider data
@@ -241,13 +241,13 @@ fn worker_func(physics: &Physics) {
 }
 
 /// Spawns physics worker thread
-pub fn spawn_worker(physics: Physics) -> Worker {
-    Worker::spawn("Physics", move |alive| {
+pub fn spawn_worker(workers: &workers::Workers, physics: Physics) -> handle::Handle {
+    workers.spawn("Physics", move |token| {
         const UPDATE_RATE: f32 = 1.0 / 120.0;
 
         let mut last_update = Instant::now();
 
-        while alive.load(Ordering::Relaxed) {
+        while !token.is_cancelled() {
             let elapsed = Instant::now().duration_since(last_update).as_secs_f32();
 
             worker_func(&physics);

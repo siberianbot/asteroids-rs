@@ -1,11 +1,11 @@
 use std::{
     collections::BTreeMap,
-    sync::{Arc, Mutex, atomic::Ordering},
+    sync::{Arc, Mutex},
     thread,
     time::{Duration, Instant},
 };
 
-use crate::worker::Worker;
+use crate::{handle, workers};
 
 /// Trait of a game logic, which handles some high-level game logic
 pub trait GameLogic: Send + Sync {
@@ -91,13 +91,13 @@ fn worker_func(game_loop: &Loop, elapsed: f32) {
 }
 
 /// Spawns game loop worker thread
-pub fn spawn_worker(r#loop: Arc<Loop>) -> Worker {
-    Worker::spawn("GameLoop", move |alive| {
+pub fn spawn_worker(workers: &workers::Workers, r#loop: Arc<Loop>) -> handle::Handle {
+    workers.spawn("GameLoop", move |token| {
         const UPDATE_RATE: f32 = 1.0 / 120.0;
 
         let mut last_update = Instant::now();
 
-        while alive.load(Ordering::Relaxed) {
+        while !token.is_cancelled() {
             let elapsed = Instant::now().duration_since(last_update).as_secs_f32();
 
             worker_func(&r#loop, elapsed);
