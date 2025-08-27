@@ -25,7 +25,7 @@ impl CancellationToken {
     fn cancel(&self) {
         let _ = self
             .token
-            .compare_exchange(true, false, Ordering::Relaxed, Ordering::Relaxed);
+            .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed);
     }
 }
 
