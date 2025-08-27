@@ -5,31 +5,28 @@ use std::{
 };
 
 use glam::{Mat4, Vec3};
-use vulkano::{
-    buffer::{BufferUsage, Subbuffer},
-    command_buffer::{
-        AutoCommandBufferBuilder, CommandBufferUsage, PrimaryAutoCommandBuffer,
-        RenderingAttachmentInfo, RenderingInfo, allocator::CommandBufferAllocator,
-    },
-    descriptor_set::{DescriptorSet, WriteDescriptorSet, allocator::DescriptorSetAllocator},
-    format::ClearValue,
-    pipeline::{
-        GraphicsPipeline, Pipeline, PipelineBindPoint, PipelineLayout, graphics::viewport::Viewport,
-    },
-    render_pass::{AttachmentLoadOp, AttachmentStoreOp},
-};
 
 use crate::{
-    assets::{AssetRef, Assets, types::Vertex},
-    events,
+    assets, events,
     game::entities::{Asteroid, Bullet, Camera, EntityId, Spacecraft},
     handle,
     rendering::{
-        backend::{Backend, Frame},
-        shaders,
+        backend, buffer,
+        commands::{self, CommandListSubmit},
+        descriptors, frame, physical_device, pipeline,
     },
     workers,
 };
+
+mod vk {
+    pub use vulkano::{
+        command_buffer::{RenderingAttachmentInfo, RenderingInfo},
+        descriptor_set::{DescriptorSet, WriteDescriptorSet},
+        format::ClearValue,
+        pipeline::graphics::viewport::Viewport,
+        render_pass::{AttachmentLoadOp, AttachmentStoreOp},
+    };
+}
 
 /// View data to use in rendering
 pub struct ViewRenderData {
@@ -48,8 +45,8 @@ impl From<&Camera> for ViewRenderData {
 pub struct ModelRenderData {
     matrix: Mat4,
     color: Vec3,
-    mesh: AssetRef,
-    pipeline: AssetRef,
+    mesh: assets::AssetRef,
+    pipeline: assets::AssetRef,
 }
 
 impl From<&Spacecraft> for ModelRenderData {
@@ -111,8 +108,8 @@ impl From<ModelRenderData> for RenderData {
 
 /// INTERNAL: cache for model data
 struct ModelCache {
-    buffer: Subbuffer<shaders::Model>,
-    descriptor_set: Arc<DescriptorSet>,
+    buffer: buffer::Buffer<assets::types::Model>,
+    descriptor: Arc<vk::DescriptorSet>,
 }
 
 /// INTERNAL: some inner data store for [Renderer]
@@ -125,28 +122,28 @@ struct Store {
 
 /// Renderer
 pub struct Renderer {
-    command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
-    descriptor_set_allocator: Arc<dyn DescriptorSetAllocator>,
+    command_list_allocator: commands::CommandListAllocator,
+    descriptor_allocator: descriptors::DescriptorAllocator,
 
     store: Arc<Store>,
     _handler: handle::Handle,
 
-    backend: Arc<Backend>,
-    assets: Arc<Assets>,
+    backend: Arc<backend::Backend>,
+    assets: Arc<assets::Assets>,
 }
 
 impl Renderer {
     /// Creates new instance of [Renderer]
     pub fn new(
         events: &events::Events,
-        backend: Arc<Backend>,
-        assets: Arc<Assets>,
+        backend: Arc<backend::Backend>,
+        assets: Arc<assets::Assets>,
     ) -> Arc<Renderer> {
         let store: Arc<Store> = Default::default();
 
         let renderer = Renderer {
-            command_buffer_allocator: backend.create_command_buffer_allocator(),
-            descriptor_set_allocator: backend.create_descriptor_set_allocator(),
+            command_list_allocator: commands::CommandListAllocatorFactory::create(backend.as_ref()),
+            descriptor_allocator: descriptors::DescriptorAllocatorFactory::create(backend.as_ref()),
 
             store: store.clone(),
             _handler: events.add_handler(move |event| match event {
@@ -182,18 +179,12 @@ impl Renderer {
         render_data.insert(entity_id, data.into());
     }
 
-    fn render_view(
-        &self,
-        frame: &Frame,
-        command_buffer_builder: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>,
-    ) {
+    fn render_view(&self, frame: &frame::Frame, command_list: &mut commands::CommandList) {
         struct Item {
-            pipeline: Arc<GraphicsPipeline>,
-            pipeline_layout: Arc<PipelineLayout>,
-            pipeline_descriptor_set: Arc<DescriptorSet>,
-            vertex: Subbuffer<[Vertex]>,
-            index: Subbuffer<[u32]>,
-            index_len: u64,
+            pipeline: pipeline::Pipeline,
+            descriptor: Arc<vk::DescriptorSet>,
+            vertex: buffer::Buffer<assets::types::Vertex>,
+            index: buffer::Buffer<u32>,
         }
 
         let render_data = self.store.render_data.lock().unwrap();
@@ -211,7 +202,9 @@ impl Renderer {
                 _ => None,
             })
             .map(|view_matrix| {
-                let mut projection = Mat4::perspective_infinite_lh(PI / 2.0, frame.aspect(), 0.001);
+                let [w, h] = frame.swapchain.extent;
+                let aspect = w / h;
+                let mut projection = Mat4::perspective_infinite_lh(PI / 2.0, aspect, 0.001);
 
                 projection.col_mut(1)[1] *= -1.0;
 
@@ -249,43 +242,42 @@ impl Renderer {
                     None => return None,
                 };
 
-                let model_cache = model_cache.entry(entity_id).or_insert_with(|| {
-                    let layout = pipeline
-                        .layout()
-                        .set_layouts()
-                        .get(0)
-                        .cloned()
-                        .expect("invalid descriptor set layout");
+                let model_cache = model_cache
+                    .entry(entity_id)
+                    .and_modify(|model_cache| {
+                        let mut buffer = model_cache.buffer.write();
+                        let buffer_model = buffer.get_mut(0).unwrap();
 
-                    let buffer = self.backend.create_buffer(BufferUsage::UNIFORM_BUFFER);
+                        *buffer_model = assets::types::Model {
+                            color: model.color,
+                            matrix: camera_matrix * model.matrix,
+                        };
+                    })
+                    .or_insert_with(|| {
+                        let buffer = buffer::BufferFactory::create(
+                            self.backend.as_ref(),
+                            buffer::BufferDef {
+                                usage: buffer::BufferUsage::Uniform,
+                                data: buffer::BufferData::Value(assets::types::Model {
+                                    color: model.color,
+                                    matrix: camera_matrix * model.matrix,
+                                }),
+                            },
+                        );
 
-                    let descriptor_set = DescriptorSet::new(
-                        self.descriptor_set_allocator.clone(),
-                        layout,
-                        [WriteDescriptorSet::buffer(0, buffer.clone())],
-                        [],
-                    )
-                    .expect("failed to create descriptor set for entity");
+                        let descriptor = self.descriptor_allocator.allocate(
+                            &pipeline,
+                            0,
+                            [vk::WriteDescriptorSet::buffer(0, buffer.handle.clone())],
+                            [],
+                        );
 
-                    ModelCache {
-                        buffer,
-                        descriptor_set,
-                    }
-                });
-
-                let mut buffer = model_cache
-                    .buffer
-                    .write()
-                    .expect("failed to update model buffer");
-
-                buffer.color = model.color;
-                buffer.matrix = camera_matrix * model.matrix;
+                        ModelCache { buffer, descriptor }
+                    });
 
                 let item = Item {
-                    pipeline_layout: pipeline.layout().clone(),
-                    pipeline_descriptor_set: model_cache.descriptor_set.clone(),
-                    index_len: index.len(),
                     pipeline,
+                    descriptor: model_cache.descriptor.clone(),
                     vertex,
                     index,
                 };
@@ -294,82 +286,51 @@ impl Renderer {
             });
 
         for item in items {
-            command_buffer_builder
-                .bind_pipeline_graphics(item.pipeline)
-                .expect("failed to bind entity pipeline");
-
-            command_buffer_builder
-                .bind_vertex_buffers(0, item.vertex)
-                .expect("failed to bind vertex buffer");
-
-            command_buffer_builder
-                .bind_index_buffer(item.index)
-                .expect("failed to bind index buffer");
-
-            command_buffer_builder
-                .bind_descriptor_sets(
-                    PipelineBindPoint::Graphics,
-                    item.pipeline_layout,
-                    0,
-                    vec![item.pipeline_descriptor_set],
-                )
-                .expect("failed to bind descriptor set");
-
-            unsafe {
-                command_buffer_builder
-                    .draw_indexed(item.index_len as u32, 1, 0, 0, 0)
-                    .expect("failed to draw entity");
-            }
+            command_list.bind_pipeline(&item.pipeline);
+            command_list.bind_vertex_buffer(&item.vertex);
+            command_list.bind_index_buffer(&item.index);
+            command_list.bind_descriptors(&item.pipeline, [item.descriptor]);
+            command_list.draw(item.index.len(), 1);
         }
     }
 }
 
 /// INTERNAL: Renderer worker thread function
 fn worker_func(renderer: &Renderer) {
-    if let Some(frame) = renderer.backend.acquire_frame() {
-        let mut command_buffer_builder = AutoCommandBufferBuilder::primary(
-            renderer.command_buffer_allocator.clone(),
-            renderer.backend.graphics_queue_family_index(),
-            CommandBufferUsage::MultipleSubmit,
-        )
-        .expect("failed to create command buffer builder");
+    if let Some(frame) = frame::FrameFactory::try_acquire(renderer.backend.as_ref()) {
+        let mut command_list = renderer.command_list_allocator.new_list(
+            physical_device::QueueFamilyType::Graphics,
+            commands::CommandListUsage::Multiple,
+        );
 
-        command_buffer_builder
-            .begin_rendering(RenderingInfo {
-                color_attachments: vec![Some(RenderingAttachmentInfo {
-                    load_op: AttachmentLoadOp::Clear,
-                    store_op: AttachmentStoreOp::Store,
-                    clear_value: Some(ClearValue::Float([0.0, 0.0, 0.0, 1.0])),
+        let image_view = frame
+            .swapchain
+            .image_views
+            .get(frame.image_index as usize)
+            .cloned()
+            .expect("invalid image index");
 
-                    ..RenderingAttachmentInfo::image_view(frame.image_view())
-                })],
-                ..Default::default()
-            })
-            .expect("failed to begin rendering");
+        command_list.begin_rendering(vk::RenderingInfo {
+            color_attachments: vec![Some(vk::RenderingAttachmentInfo {
+                load_op: vk::AttachmentLoadOp::Clear,
+                store_op: vk::AttachmentStoreOp::Store,
+                clear_value: Some(vk::ClearValue::Float([0.0, 0.0, 0.0, 1.0])),
+                ..vk::RenderingAttachmentInfo::image_view(image_view)
+            })],
+            ..Default::default()
+        });
 
-        command_buffer_builder
-            .set_viewport(
-                0,
-                vec![Viewport {
-                    offset: [0.0, 0.0],
-                    extent: frame.extent(),
-                    ..Default::default()
-                }]
-                .into(),
-            )
-            .expect("failed to set viewport");
+        command_list.set_viewports([vk::Viewport {
+            offset: [0.0, 0.0],
+            extent: frame.swapchain.extent,
+            ..Default::default()
+        }]);
 
-        renderer.render_view(&frame, &mut command_buffer_builder);
+        renderer.render_view(&frame, &mut command_list);
 
-        command_buffer_builder
-            .end_rendering()
-            .expect("failed to end rendering");
+        command_list.end_rendering();
 
-        let command_buffer = command_buffer_builder
-            .build()
-            .expect("failed to build command buffer");
-
-        frame.submit(command_buffer);
+        frame.submit(command_list);
     }
 }
 

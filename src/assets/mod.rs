@@ -3,17 +3,9 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use vulkano::{
-    Validated, VulkanError,
-    buffer::{BufferUsage, Subbuffer},
-    device::Device,
-    pipeline::{GraphicsPipeline, graphics::input_assembly::PrimitiveTopology},
-    shader::ShaderModule,
-};
-
 use crate::{
     assets::types::Vertex,
-    rendering::backend::{Backend, ShaderStage},
+    rendering::{backend, buffer, pipeline},
 };
 
 pub mod models;
@@ -23,15 +15,15 @@ pub mod types;
 /// Mesh asset data
 pub struct MeshAsset {
     /// Vertex buffer
-    pub vertex: Subbuffer<[Vertex]>,
+    pub vertex: buffer::Buffer<Vertex>,
     /// Index buffer
-    pub index: Subbuffer<[u32]>,
+    pub index: buffer::Buffer<u32>,
 }
 
 /// Pipeline asset data
 pub struct PipelineAsset {
     /// Pipeline
-    pub pipeline: Arc<GraphicsPipeline>,
+    pub pipeline: pipeline::Pipeline,
 }
 
 /// An asset
@@ -80,7 +72,7 @@ impl From<PipelineAsset> for Asset {
 
 /// Context for [IntoAsset::into_asset] trait method
 pub struct IntoAssetContext {
-    backend: Arc<Backend>,
+    backend: Arc<backend::Backend>,
 }
 
 /// Trait of type, which can construct instance of [Asset] from its definition
@@ -100,39 +92,45 @@ pub struct MeshAssetDef {
 impl IntoAsset for MeshAssetDef {
     fn into_asset(self, context: IntoAssetContext) -> Asset {
         let mesh = MeshAsset {
-            vertex: context
-                .backend
-                .create_buffer_iter(BufferUsage::VERTEX_BUFFER, self.vertices.into_iter()),
+            vertex: buffer::BufferFactory::create(
+                context.backend.as_ref(),
+                buffer::BufferDef {
+                    usage: buffer::BufferUsage::Vertex,
+                    data: buffer::BufferData::Slice(&self.vertices),
+                },
+            ),
 
-            index: context
-                .backend
-                .create_buffer_iter(BufferUsage::INDEX_BUFFER, self.indices.into_iter()),
+            index: buffer::BufferFactory::create(
+                context.backend.as_ref(),
+                buffer::BufferDef {
+                    usage: buffer::BufferUsage::Index,
+                    data: buffer::BufferData::Slice(&self.indices),
+                },
+            ),
         };
 
         mesh.into()
     }
 }
 
-/// Type alias for pipeline shader
-pub type PipelineShader = (
-    ShaderStage,
-    Box<dyn FnOnce(Arc<Device>) -> Result<Arc<ShaderModule>, Validated<VulkanError>>>,
-);
-
 /// Definition of [PipelineAsset]
 pub struct PipelineAssetDef {
-    /// Primitive topology
-    pub topology: PrimitiveTopology,
     /// List of shaders
-    pub shaders: Vec<PipelineShader>,
+    pub shaders: Vec<pipeline::ShaderFactory>,
+    /// List of shader bindings
+    pub bindings: Vec<pipeline::InputDataBinding>,
 }
 
 impl IntoAsset for PipelineAssetDef {
     fn into_asset(self, context: IntoAssetContext) -> Asset {
         let pipeline = PipelineAsset {
-            pipeline: context
-                .backend
-                .create_pipeline(self.topology, self.shaders.into_iter()),
+            pipeline: pipeline::PipelineFactory::create(
+                context.backend.as_ref(),
+                pipeline::PipelineDef {
+                    shaders: self.shaders,
+                    bindings: self.bindings,
+                },
+            ),
         };
 
         pipeline.into()
@@ -157,13 +155,13 @@ impl From<String> for AssetRef {
 
 /// Assets infrastructure
 pub struct Assets {
-    backend: Arc<Backend>,
+    backend: Arc<backend::Backend>,
     assets: RwLock<BTreeMap<AssetRef, Arc<Asset>>>,
 }
 
 impl Assets {
     /// Creates new instance of [Assets]
-    pub fn new(backend: Arc<Backend>) -> Arc<Assets> {
+    pub fn new(backend: Arc<backend::Backend>) -> Arc<Assets> {
         let assets = Assets {
             backend,
             assets: Default::default(),

@@ -10,12 +10,14 @@ use std::{
 
 use glam::Vec2;
 use rand::seq::IteratorRandom;
-use vulkano::pipeline::graphics::input_assembly::PrimitiveTopology;
 
 use crate::{
-    assets::{self, MeshAssetDef, types::Vertex},
+    assets::{
+        self, MeshAssetDef,
+        types::{self, Vertex},
+    },
     game::{controller::Controller, ecs::ECS, entities, players::Players},
-    rendering::{self, renderer},
+    rendering::{pipeline, renderer},
 };
 
 /// State for [init_game_logic]
@@ -59,17 +61,18 @@ pub fn init_game_logic(_: f32, state: &InitGameLogicState) {
     state.assets.load(
         entities::consts::ENTITY_PIPELINE_ASSET_REF.into(),
         assets::PipelineAssetDef {
-            topology: PrimitiveTopology::TriangleList,
             shaders: vec![
-                (
-                    rendering::backend::ShaderStage::Vertex,
-                    Box::new(assets::shaders::entity::vs::load),
-                ),
-                (
-                    rendering::backend::ShaderStage::Fragment,
-                    Box::new(assets::shaders::entity::fs::load),
-                ),
+                Box::new(assets::shaders::entity::vs::load),
+                Box::new(assets::shaders::entity::fs::load),
             ],
+            bindings: vec![pipeline::InputDataBinding {
+                stride: std::mem::size_of::<types::Vertex>(),
+                rate: pipeline::InputDataRate::PerVertex,
+                attributes: vec![pipeline::InputDataAttribute {
+                    offset: 0,
+                    format: pipeline::InputDataFormat::Vec2,
+                }],
+            }],
         },
     );
 
