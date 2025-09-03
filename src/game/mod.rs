@@ -1,6 +1,10 @@
 use std::sync::Arc;
 
-use crate::{assets, commands as app_commands, events, handle, rendering::renderer, workers};
+use crate::{
+    assets, commands as app_commands, events, handle,
+    rendering::{backend, renderer},
+    scene, workers,
+};
 
 pub mod ecs;
 pub mod entities;
@@ -25,16 +29,18 @@ impl Game {
     /// Creates new instance of [Game] with default systems and game logics
     pub fn new(
         workers: &workers::Workers,
-        events: &events::Events,
+        events: Arc<events::Events>,
         commands: Arc<app_commands::Commands>,
+        backend: Arc<backend::Backend>,
         assets: Arc<assets::Assets>,
         renderer: Arc<renderer::Renderer>,
     ) -> Arc<Game> {
-        let ecs = ecs::ECS::new(events);
+        let ecs = ecs::ECS::new(&events);
         let r#loop: Arc<r#loop::Loop> = Default::default();
-        let players = players::Players::new(events);
+        let players = players::Players::new(&events);
         let controller = controller::Controller::new(ecs.clone(), players.clone());
         let physics = physics::Physics::new(ecs.clone());
+        let scene = scene::Scene::new(&events);
 
         let game = Game {
             _systems: [
@@ -66,10 +72,10 @@ impl Game {
                     Into::<ecs::StatelessSystem>::into(systems::asteroid_rotation_system),
                 ),
                 ecs.add_system(
-                    "renderer_dispatch_system",
+                    "scene_dispatch_system",
                     ecs::StatefulSystem::new(
-                        systems::RendererDispatchSystemState::new(renderer.clone()),
-                        systems::renderer_dispatch_system,
+                        systems::SceneDispatchSystemState::new(scene.clone()),
+                        systems::scene_dispatch_system,
                     ),
                 ),
                 ecs.add_system(
@@ -90,11 +96,14 @@ impl Game {
                     "init_game_logic",
                     r#loop::StatefulGameLogic::new(
                         logics::InitGameLogicState::new(
+                            events.clone(),
+                            backend.clone(),
                             assets.clone(),
                             renderer.clone(),
                             ecs.clone(),
                             players.clone(),
                             controller.clone(),
+                            scene.clone(),
                         ),
                         logics::init_game_logic,
                     ),

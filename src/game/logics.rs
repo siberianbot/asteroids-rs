@@ -16,35 +16,46 @@ use crate::{
         self, MeshAssetDef,
         types::{self, Vertex},
     },
+    events,
     game::{controller::Controller, ecs::ECS, entities, players::Players},
-    rendering::{pipeline, renderer},
+    rendering::{backend, pipeline, render_graph, render_graph_operation, renderer},
+    scene,
 };
 
 /// State for [init_game_logic]
 pub struct InitGameLogicState {
+    events: Arc<events::Events>,
+    backend: Arc<backend::Backend>,
     assets: Arc<assets::Assets>,
     renderer: Arc<renderer::Renderer>,
     ecs: Arc<ECS>,
     players: Arc<Players>,
     controller: Arc<Controller>,
+    scene: Arc<scene::Scene>,
     initialized: AtomicBool,
 }
 
 impl InitGameLogicState {
     /// Creates new instance of [InitGameLogicState]
     pub fn new(
+        events: Arc<events::Events>,
+        backend: Arc<backend::Backend>,
         assets: Arc<assets::Assets>,
         renderer: Arc<renderer::Renderer>,
         ecs: Arc<ECS>,
         players: Arc<Players>,
         controller: Arc<Controller>,
+        scene: Arc<scene::Scene>,
     ) -> InitGameLogicState {
         InitGameLogicState {
+            events,
+            backend,
             assets,
             renderer,
             ecs,
             players,
             controller,
+            scene,
             initialized: Default::default(),
         }
     }
@@ -103,10 +114,35 @@ pub fn init_game_logic(_: f32, state: &InitGameLogicState) {
     };
     let camera_id = state.ecs.write().create(camera);
 
-    state.renderer.set_view(Some(camera_id));
-
     state.controller.set_camera(Some(camera_id));
     state.controller.set_player(Some(player_id));
+
+    state.renderer.add_graph(
+        "default",
+        render_graph::RenderGraphBuilder::default()
+            .add_target("swapchain", render_graph::Target::Swapchain)
+            .add_pass(|pass_builder| {
+                pass_builder
+                    .add_color(render_graph::Attachment {
+                        target: "swapchain".into(),
+                        load_op: render_graph::AttachmentLoadOp::Clear(
+                            render_graph::ClearValue::Float([0.0, 0.0, 0.0, 1.0]),
+                        ),
+                        store_op: render_graph::AttachmentStoreOp::Store,
+                    })
+                    .set_operation(render_graph::StatefulOperation::new(
+                        render_graph_operation::SceneRenderingOperationState::new(
+                            &state.events,
+                            state.backend.clone(),
+                            state.assets.clone(),
+                            state.scene.clone(),
+                        ),
+                        render_graph_operation::scene_rendering_operation,
+                    ))
+            })
+            .build(),
+        [("view_entity_id", render_graph::Arg::EntityId(camera_id))],
+    );
 }
 
 /// State for [asteroids_respawn_game_logic]

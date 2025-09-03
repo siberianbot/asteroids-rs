@@ -32,7 +32,7 @@ struct State {
 impl State {
     fn new(
         workers: &workers::Workers,
-        events: &events::Events,
+        events: Arc<events::Events>,
         commands: Arc<commands::Commands>,
         input: Arc<input::Input>,
         event_loop: &ActiveEventLoop,
@@ -41,13 +41,14 @@ impl State {
 
         let backend = backend::Backend::new(event_loop, window.clone());
         let assets = assets::Assets::new(backend.clone());
-        let renderer = renderer::Renderer::new(events, backend.clone(), assets.clone());
+        let renderer = renderer::Renderer::new(backend.clone());
 
         let inner = State {
             _game: game::Game::new(
                 workers,
-                events,
+                events.clone(),
                 commands.clone(),
+                backend.clone(),
                 assets.clone(),
                 renderer.clone(),
             ),
@@ -157,7 +158,7 @@ impl ApplicationHandler<AppEvent> for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let state = State::new(
             &self.workers,
-            &self.events,
+            self.events.clone(),
             self.commands.clone(),
             self.input.clone(),
             event_loop,

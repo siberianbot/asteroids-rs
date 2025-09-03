@@ -62,14 +62,6 @@ impl PhysicalDevice {
         physical_device
     }
 
-    /// Gets queue family type by index
-    pub fn get_queue_family_type(&self, index: u32) -> Option<QueueFamilyType> {
-        self.queue_families
-            .iter()
-            .find(|(_, queue_family_index)| **queue_family_index == index)
-            .map(|(queue_family_type, _)| *queue_family_type)
-    }
-
     /// INTERNAL: tries to construct physical device if it supports everything we need
     fn try_from(handle: Arc<vk::PhysicalDevice>, surface: &vk::Surface) -> Option<PhysicalDevice> {
         let queue_families = handle

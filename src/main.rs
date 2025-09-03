@@ -6,6 +6,7 @@ mod game;
 mod handle;
 mod input;
 mod rendering;
+mod scene;
 mod workers;
 
 fn main() {

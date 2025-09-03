@@ -11,7 +11,7 @@ use crate::{
         physics::Collision,
         players::Players,
     },
-    rendering::renderer,
+    scene,
 };
 
 /// State for [camera_sync_system]
@@ -246,43 +246,43 @@ pub fn entity_collision_system(args: SystemArgs) {
     }
 }
 
-/// State for [renderer_dispatch_system]
-pub struct RendererDispatchSystemState {
-    renderer: Arc<renderer::Renderer>,
+/// State for [scene_dispatch_system]
+pub struct SceneDispatchSystemState {
+    scene: Arc<scene::Scene>,
 }
 
-impl RendererDispatchSystemState {
-    /// Creates new instance of [RendererDispatchSystemState]
-    pub fn new(renderer: Arc<renderer::Renderer>) -> RendererDispatchSystemState {
-        RendererDispatchSystemState { renderer }
+impl SceneDispatchSystemState {
+    /// Creates new instance of [SceneDispatchSystemState]
+    pub fn new(scene: Arc<scene::Scene>) -> SceneDispatchSystemState {
+        SceneDispatchSystemState { scene }
     }
 }
 
-/// Dispatches data from entity to renderer
-pub fn renderer_dispatch_system(args: SystemArgs, state: &RendererDispatchSystemState) {
+/// Dispatches scene data from entities
+pub fn scene_dispatch_system(args: SystemArgs, state: &SceneDispatchSystemState) {
     match args.entity {
         Entity::Camera(camera) => {
             state
-                .renderer
-                .dispatch::<renderer::ViewRenderData>(args.entity_id, camera.into());
+                .scene
+                .dispatch::<scene::ViewSceneEntity>(args.entity_id, camera.into());
         }
 
         Entity::Spacecraft(spacecraft) => {
             state
-                .renderer
-                .dispatch::<renderer::ModelRenderData>(args.entity_id, spacecraft.into());
+                .scene
+                .dispatch::<scene::ModelSceneEntity>(args.entity_id, spacecraft.into());
         }
 
         Entity::Asteroid(asteroid) => {
             state
-                .renderer
-                .dispatch::<renderer::ModelRenderData>(args.entity_id, asteroid.into());
+                .scene
+                .dispatch::<scene::ModelSceneEntity>(args.entity_id, asteroid.into());
         }
 
         Entity::Bullet(bullet) => {
             state
-                .renderer
-                .dispatch::<renderer::ModelRenderData>(args.entity_id, bullet.into());
+                .scene
+                .dispatch::<scene::ModelSceneEntity>(args.entity_id, bullet.into());
         }
     }
 }

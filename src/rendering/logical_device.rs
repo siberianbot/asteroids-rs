@@ -58,7 +58,7 @@ impl LogicalDevice {
             ..Default::default()
         };
 
-        let (handle, mut queues) = vk::Device::new(physical_device.handle.clone(), create_info)
+        let (handle, queues) = vk::Device::new(physical_device.handle.clone(), create_info)
             .map(|(handle, queues_iter)| {
                 (
                     handle,
