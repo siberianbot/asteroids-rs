@@ -6,10 +6,13 @@ use std::{
 
 use glam::Vec2;
 
-use crate::game::{
-    ecs::ECS,
-    entities::EntityId,
-    players::{PlayerId, Players},
+use crate::{
+    consts::VEC2_RIGHT,
+    game::{
+        ecs::ECS,
+        entities::EntityId,
+        players::{PlayerId, Players},
+    },
 };
 
 /// [crate::game::entities::Camera] zoom direction
@@ -109,7 +112,7 @@ impl Controller {
                         }
 
                         let mut acceleration =
-                            Vec2::ONE.rotate(entity.transform().rotation.sin_cos().into());
+                            VEC2_RIGHT.rotate(entity.transform().rotation.sin_cos().into());
 
                         acceleration *= match direction {
                             SpacecraftAccelerationDirection::Forward => ACCELERATION,

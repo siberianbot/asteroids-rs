@@ -1,8 +1,7 @@
 use std::sync::Arc;
 
-use glam::Vec2;
-
 use crate::{
+    consts::VEC2_RIGHT,
     game::{
         ecs::SystemArgs,
         entities::{
@@ -101,7 +100,7 @@ pub fn spacecraft_weapon_fire_system(args: SystemArgs) {
                 None
             } else {
                 let velocity = BULLET_VELOCITY
-                    * Vec2::ONE.rotate(args.entity.transform().rotation.sin_cos().into());
+                    * VEC2_RIGHT.rotate(args.entity.transform().rotation.sin_cos().into());
 
                 let bullet = Bullet {
                     transform: TransformComponent {

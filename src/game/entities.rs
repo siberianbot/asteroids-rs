@@ -4,6 +4,7 @@ use glam::{Mat4, Quat, Vec2, Vec3};
 
 use crate::{
     assets::AssetRef,
+    consts::VEC2_RIGHT,
     game::{
         physics::{Collider, Collision, TriangleCollider},
         players::PlayerId,
@@ -248,7 +249,7 @@ impl Asteroid {
         let sin_cos = rand::random_range(VELOCITY_ANGLE_RANGE).sin_cos();
 
         MovementComponent {
-            velocity: velocity * Vec2::ONE.rotate(sin_cos.into()),
+            velocity: velocity * VEC2_RIGHT.rotate(sin_cos.into()),
             acceleration: Default::default(),
             const_velocity: true,
         }

@@ -12,10 +12,8 @@ use glam::Vec2;
 use rand::seq::IteratorRandom;
 
 use crate::{
-    assets::{
-        self, MeshAssetDef,
-        types::{self, Vertex},
-    },
+    assets::{self, types},
+    consts::VEC2_RIGHT,
     events,
     game::{controller::Controller, ecs::ECS, entities, players::Players},
     rendering::{backend, pipeline, render_graph, render_graph_operation, renderer},
@@ -212,7 +210,7 @@ pub fn asteroids_respawn_game_logic(elapsed: f32, state: &AsteroidsRespawnGameLo
 
     let distance = rand::random_range(DISTANCE_RANGE);
     let rotation = rand::random_range(ROTATION_RANGE);
-    let position = position + distance * Vec2::ONE.rotate(rotation.sin_cos().into());
+    let position = position + distance * VEC2_RIGHT.rotate(rotation.sin_cos().into());
 
     let asteroid = entities::Asteroid {
         transform: entities::TransformComponent {
@@ -222,15 +220,15 @@ pub fn asteroids_respawn_game_logic(elapsed: f32, state: &AsteroidsRespawnGameLo
         ..Default::default()
     };
 
-    let asteroid_mesh_def = MeshAssetDef {
-        vertices: once(Vertex::default())
+    let asteroid_mesh_def = assets::MeshAssetDef {
+        vertices: once(types::Vertex::default())
             .chain(
                 asteroid
                     .asteroid
                     .body
                     .iter()
                     .copied()
-                    .map(|vertex| Vertex { position: vertex }),
+                    .map(|vertex| types::Vertex { position: vertex }),
             )
             .collect(),
 

@@ -1,6 +1,7 @@
 mod app;
 mod assets;
 mod commands;
+mod consts;
 mod events;
 mod game;
 mod handle;
