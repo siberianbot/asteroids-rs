@@ -83,7 +83,7 @@ pub fn scene_rendering_operation(
         .color
         .get(0)
         .expect("there is no color target")
-        .size;
+        .extent;
 
     let view_entity_id = context
         .args

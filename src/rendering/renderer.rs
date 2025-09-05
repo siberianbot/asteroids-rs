@@ -84,7 +84,7 @@ impl render_graph::RenderGraphExecutor for Renderer {
                     .get(frame.image_index as usize)
                     .map(|image_view| image::ImageView {
                         handle: image_view.clone(),
-                        size: frame.swapchain.extent,
+                        extent: frame.swapchain.extent,
                     })
                     .map(|image_view| (target_name.clone(), image_view))
                     .expect("invalid image index"),

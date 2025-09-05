@@ -4,10 +4,11 @@ use std::{
 };
 
 use smallvec::{SmallVec, smallvec};
+use vulkano::sync::GpuFuture;
 use winit::{event_loop::ActiveEventLoop, window::Window};
 
 use crate::rendering::{
-    buffer, commands, descriptors, frame, logical_device::LogicalDevice,
+    buffer, commands, descriptors, frame, image, logical_device::LogicalDevice,
     physical_device::PhysicalDevice, pipeline, swapchain::Swapchain,
 };
 
@@ -17,6 +18,7 @@ mod vk {
         buffer::{Buffer, BufferContents, BufferCreateInfo},
         command_buffer::allocator::StandardCommandBufferAllocator,
         descriptor_set::allocator::StandardDescriptorSetAllocator,
+        image::{Image, ImageCreateInfo, ImageType},
         instance::{Instance, InstanceCreateInfo},
         memory::allocator::{
             AllocationCreateInfo, MemoryAllocator, MemoryTypeFilter, StandardMemoryAllocator,
@@ -37,6 +39,7 @@ mod vk {
             layout::PipelineDescriptorSetLayoutCreateInfo,
         },
         swapchain::{Surface, acquire_next_image},
+        sync,
     };
 }
 
@@ -130,6 +133,37 @@ impl buffer::BufferFactory for Backend {
         };
 
         buffer
+    }
+}
+
+impl image::ImageFactory for Backend {
+    fn create(&self, definition: image::ImageDef) -> image::Image {
+        let [w, h] = definition.extent;
+
+        let create_info = vk::ImageCreateInfo {
+            image_type: vk::ImageType::Dim2d,
+
+            usage: definition.usage.into(),
+            extent: [w as u32, h as u32, 1],
+            format: definition.format.into(),
+
+            ..Default::default()
+        };
+
+        let allocation_info = vk::AllocationCreateInfo {
+            memory_type_filter: vk::MemoryTypeFilter::PREFER_DEVICE,
+            ..Default::default()
+        };
+
+        let handle = vk::Image::new(self.memory_allocator.clone(), create_info, allocation_info)
+            .expect("failed to create image");
+
+        let image = image::Image {
+            handle,
+            extent: definition.extent,
+        };
+
+        image
     }
 }
 
@@ -255,6 +289,20 @@ impl commands::CommandListAllocatorFactory for Backend {
         };
 
         allocator
+    }
+}
+
+impl commands::CommandListSubmit for Backend {
+    fn submit(self, command_list: commands::CommandList) {
+        let command_buffer = command_list
+            .builder
+            .build()
+            .expect("failed to build command buffer");
+
+        vk::sync::now(self.logical_device.handle.clone())
+            .then_execute(command_list.queue, command_buffer)
+            .expect("failed to execute command buffer")
+            .cleanup_finished();
     }
 }
 

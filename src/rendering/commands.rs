@@ -2,14 +2,14 @@ use std::sync::Arc;
 
 use vulkano::pipeline::Pipeline;
 
-use crate::rendering::{buffer, logical_device, physical_device, pipeline};
+use crate::rendering::{buffer, image, logical_device, physical_device, pipeline};
 
 mod vk {
     pub use vulkano::{
         buffer::BufferContents,
         command_buffer::{
-            AutoCommandBufferBuilder, CommandBufferUsage, PrimaryAutoCommandBuffer, RenderingInfo,
-            allocator::CommandBufferAllocator,
+            AutoCommandBufferBuilder, CommandBufferUsage, CopyBufferToImageInfo,
+            PrimaryAutoCommandBuffer, RenderingInfo, allocator::CommandBufferAllocator,
         },
         descriptor_set::DescriptorSetWithOffsets,
         device::Queue,
@@ -92,6 +92,19 @@ impl CommandList {
         self.builder
             .end_rendering()
             .expect("failed to add end rendering command");
+    }
+
+    /// Adds command to copy buffer to image
+    pub fn copy_buffer_to_image<T>(&mut self, buffer: &buffer::Buffer<T>, image: &image::Image)
+    where
+        T: vk::BufferContents + Sized,
+    {
+        let copy_buffer_to_image_info =
+            vk::CopyBufferToImageInfo::buffer_image(buffer.handle.clone(), image.handle.clone());
+
+        self.builder
+            .copy_buffer_to_image(copy_buffer_to_image_info)
+            .expect("failed to add copy buffer to image command");
     }
 
     /// Adds command to set viewports
